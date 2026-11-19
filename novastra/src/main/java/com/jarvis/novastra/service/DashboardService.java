@@ -21,16 +21,19 @@ public class DashboardService {
     private final CareerRoleRepository careerRoleRepository;
     private final EnrollmentService enrollmentService;
     private final UserSkillGapRepository userSkillGapRepository;
+    private final CareerService careerService;
 
     public DashboardService(
             UserRepository userRepository,
             CareerRoleRepository careerRoleRepository,
             EnrollmentService enrollmentService,
-            UserSkillGapRepository userSkillGapRepository) {
+            UserSkillGapRepository userSkillGapRepository,
+            CareerService careerService) {
         this.userRepository = userRepository;
         this.careerRoleRepository = careerRoleRepository;
         this.enrollmentService = enrollmentService;
         this.userSkillGapRepository = userSkillGapRepository;
+        this.careerService = careerService;
     }
 
     public Map<String, Object> getDashboard(String userId) {
@@ -55,6 +58,16 @@ public class DashboardService {
             averageProgress = sum.divide(BigDecimal.valueOf(enrolledCourses.size()), 0, RoundingMode.HALF_UP).intValue();
         }
 
+        Map<String, Object> careerData = careerService.getCareerRoadmap(uid);
+        int careerReadinessPercentage = ((Number) careerData.getOrDefault("overallProgress", 0)).intValue();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> careerCurriculum =
+                (List<Map<String, Object>>) careerData.getOrDefault("curriculum", List.of());
+        int careerTotalCoursesCount = careerCurriculum.size();
+        int careerCompletedCoursesCount = (int) careerCurriculum.stream()
+                .filter(c -> ((Number) c.getOrDefault("progressPercentage", 0)).intValue() >= 100)
+                .count();
+
         List<UserSkillGap> skillGaps = userSkillGapRepository.findByUserId(uid);
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -70,6 +83,9 @@ public class DashboardService {
         payload.put("isOnboarded", user.isOnboarded());
         payload.put("averageProgress", averageProgress);
         payload.put("activeCoursesCount", enrolledCourses.size());
+        payload.put("careerReadinessPercentage", careerReadinessPercentage);
+        payload.put("careerCompletedCoursesCount", careerCompletedCoursesCount);
+        payload.put("careerTotalCoursesCount", careerTotalCoursesCount);
         payload.put("enrolledCourses", enrolledCourses);
         payload.put("enrolledCount", enrolledCourses.size());
         payload.put("enrollments", enrolledCourses);

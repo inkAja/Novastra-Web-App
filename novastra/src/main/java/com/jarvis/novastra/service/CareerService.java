@@ -6,6 +6,7 @@ import com.jarvis.novastra.entity.Course;
 import com.jarvis.novastra.entity.CourseModule;
 import com.jarvis.novastra.entity.Enrollment;
 import com.jarvis.novastra.entity.MicroTask;
+import com.jarvis.novastra.entity.MicroTaskResult;
 import com.jarvis.novastra.entity.PortfolioProject;
 import com.jarvis.novastra.entity.Skill;
 import com.jarvis.novastra.entity.User;
@@ -16,6 +17,7 @@ import com.jarvis.novastra.repository.CourseModuleRepository;
 import com.jarvis.novastra.repository.CourseRepository;
 import com.jarvis.novastra.repository.EnrollmentRepository;
 import com.jarvis.novastra.repository.MicroTaskRepository;
+import com.jarvis.novastra.repository.MicroTaskResultRepository;
 import com.jarvis.novastra.repository.PortfolioProjectRepository;
 import com.jarvis.novastra.repository.SkillRepository;
 import com.jarvis.novastra.repository.UserRepository;
@@ -34,6 +36,7 @@ import org.springframework.stereotype.Service;
 public class CareerService {
 
     private static final String BLIND_TEST = "BLIND_TEST";
+    private static final BigDecimal PASSING_SCORE = BigDecimal.valueOf(75);
 
     private final UserRepository userRepository;
     private final CareerRoleRepository careerRoleRepository;
@@ -41,6 +44,7 @@ public class CareerService {
     private final EnrollmentRepository enrollmentRepository;
     private final CourseModuleRepository courseModuleRepository;
     private final MicroTaskRepository microTaskRepository;
+    private final MicroTaskResultRepository microTaskResultRepository;
     private final PortfolioProjectRepository portfolioProjectRepository;
     private final CareerSkillCalculationRepository careerSkillCalculationRepository;
     private final SkillRepository skillRepository;
@@ -53,6 +57,7 @@ public class CareerService {
             EnrollmentRepository enrollmentRepository,
             CourseModuleRepository courseModuleRepository,
             MicroTaskRepository microTaskRepository,
+            MicroTaskResultRepository microTaskResultRepository,
             PortfolioProjectRepository portfolioProjectRepository,
             CareerSkillCalculationRepository careerSkillCalculationRepository,
             SkillRepository skillRepository,
@@ -63,6 +68,7 @@ public class CareerService {
         this.enrollmentRepository = enrollmentRepository;
         this.courseModuleRepository = courseModuleRepository;
         this.microTaskRepository = microTaskRepository;
+        this.microTaskResultRepository = microTaskResultRepository;
         this.portfolioProjectRepository = portfolioProjectRepository;
         this.careerSkillCalculationRepository = careerSkillCalculationRepository;
         this.skillRepository = skillRepository;
@@ -70,6 +76,10 @@ public class CareerService {
     }
 
     public Map<String, Object> getCareerData(String userId) {
+        return getCareerRoadmap(userId);
+    }
+
+    public Map<String, Object> getCareerRoadmap(String userId) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId wajib diisi.");
         }
@@ -87,25 +97,32 @@ public class CareerService {
             empty.put("isOnboarded", false);
             empty.put("roleId", "");
             empty.put("roleName", "");
+            empty.put("overallProgress", 0);
             empty.put("averageProgress", 0);
             empty.put("curriculum", List.of());
             empty.put("skillGaps", List.of());
+            empty.put("skillGapAnalysis", List.of());
             empty.put("topPriorityGaps", List.of());
             empty.put("blindTests", List.of());
             empty.put("roadmap", List.of());
+            empty.put("roadmapPhases", List.of());
             empty.put("portfolioProjects", List.of());
+            empty.put("isCurriculumCompleted", false);
+            empty.put("isAllPowPassed", false);
+            empty.put("canRunAiAudit", false);
             return empty;
         }
 
         String roleId = role.getRoleId();
         String roleName = role.getRoleName();
 
-        List<Course> roleCourses = courseRepository.findByTypeCourse(roleName);
+        List<Course> roleCourses = courseRepository.findByTypeCourseIgnoreCase(roleName);
         List<String> courseIds = roleCourses.stream().map(Course::getCourseId).toList();
 
         Map<String, Integer> enrollmentProgress = enrollmentRepository.findByUserId(uid).stream()
+                .filter(e -> e.getCourseId() != null)
                 .collect(Collectors.toMap(
-                        Enrollment::getCourseId,
+                        e -> e.getCourseId().trim(),
                         e -> e.getProgressPercentage() != null ? e.getProgressPercentage().intValue() : 0,
                         Math::max));
 
@@ -113,11 +130,13 @@ public class CareerService {
                 ? List.of()
                 : portfolioProjectRepository.findByCourseIdIn(courseIds);
         Map<String, PortfolioProject> projectByCourse = projects.stream()
-                .collect(Collectors.toMap(PortfolioProject::getCourseId, p -> p, (a, b) -> a));
+                .collect(Collectors.toMap(p -> p.getCourseId().trim(), p -> p, (a, b) -> a));
 
         List<Map<String, Object>> curriculum = roleCourses.stream().map(c -> {
-            int progress = enrollmentProgress.getOrDefault(c.getCourseId(), 0);
-            PortfolioProject proj = projectByCourse.get(c.getCourseId());
+            String cid = c.getCourseId().trim();
+            boolean isEnrolled = enrollmentProgress.containsKey(cid);
+            int progress = enrollmentProgress.getOrDefault(cid, 0);
+            PortfolioProject proj = projectByCourse.get(cid);
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("courseId", c.getCourseId());
             item.put("title", c.getTitle());
@@ -125,19 +144,21 @@ public class CareerService {
             item.put("instructorName", c.getInstructorName());
             item.put("duration", c.getDuration());
             item.put("progress", progress);
+            item.put("progressPercentage", progress);
+            item.put("isEnrolled", isEnrolled);
             item.put("portfolioTitle", proj != null ? proj.getTitle() : null);
             return item;
         }).toList();
 
-        int averageProgress = curriculum.isEmpty()
+        int overallProgress = curriculum.isEmpty()
                 ? 0
                 : (int) Math.round(curriculum.stream()
-                        .mapToInt(m -> (int) m.get("progress"))
+                        .mapToInt(m -> (int) m.get("progressPercentage"))
                         .average()
                         .orElse(0));
 
         List<Map<String, Object>> skillGaps = buildSkillGaps(uid, roleId, roleName);
-        List<Map<String, Object>> blindTests = buildBlindTests(roleCourses, courseIds, roleName);
+        List<Map<String, Object>> blindTests = buildBlindTests(uid, roleCourses, courseIds, roleName);
         List<Map<String, Object>> sortedByGap = skillGaps.stream()
                 .sorted(Comparator.comparingInt((Map<String, Object> m) -> (int) m.get("gap")).reversed()
                         .thenComparing(m -> String.valueOf(m.get("skillId"))))
@@ -149,20 +170,37 @@ public class CareerService {
                 .toList();
         List<Map<String, Object>> roadmap = buildRoadmap(sortedByGap, roleName);
 
+        boolean isCurriculumCompleted = !curriculum.isEmpty() && curriculum.stream()
+                .allMatch(c -> ((Number) c.getOrDefault("progressPercentage", 0)).intValue() >= 100);
+        boolean isAllPowPassed = !blindTests.isEmpty() && blindTests.stream()
+                .allMatch(b -> Boolean.TRUE.equals(b.get("isPassed")));
+        boolean canRunAiAudit = isCurriculumCompleted && isAllPowPassed;
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("userId", uid);
         payload.put("isOnboarded", true);
         payload.put("roleId", roleId);
         payload.put("roleName", roleName);
         payload.put("roleDescription", role.getDescription());
-        payload.put("averageProgress", averageProgress);
+        payload.put("overallProgress", overallProgress);
+        payload.put("averageProgress", overallProgress);
         payload.put("curriculum", curriculum);
         payload.put("skillGaps", skillGaps);
+        payload.put("skillGapAnalysis", skillGaps);
         payload.put("topPriorityGaps", topPriorityGaps);
         payload.put("blindTests", blindTests);
         payload.put("roadmap", roadmap);
+        payload.put("roadmapPhases", roadmap);
         payload.put("portfolioProjects", projects);
+        payload.put("isCurriculumCompleted", isCurriculumCompleted);
+        payload.put("isAllPowPassed", isAllPowPassed);
+        payload.put("canRunAiAudit", canRunAiAudit);
         return payload;
+    }
+
+    /** Memeriksa apakah user memenuhi prasyarat AI Audit (kurikulum 100% dan seluruh PoW Blind Test lulus). */
+    public boolean canUserRunAudit(String userId) {
+        return Boolean.TRUE.equals(getCareerRoadmap(userId).get("canRunAiAudit"));
     }
 
     private List<Map<String, Object>> buildSkillGaps(String userId, String roleId, String roleName) {
@@ -179,7 +217,7 @@ public class CareerService {
         List<CareerSkillCalculation> roleTagged = calcs.stream()
                 .filter(c -> {
                     Skill s = skillMap.get(c.getSkillId());
-                    return s != null && roleName.equals(s.getCategory());
+                    return s != null && roleName.equalsIgnoreCase(s.getCategory());
                 })
                 .toList();
         List<CareerSkillCalculation> selected = roleTagged.isEmpty() ? calcs : roleTagged;
@@ -208,7 +246,7 @@ public class CareerService {
     }
 
     private List<Map<String, Object>> buildBlindTests(
-            List<Course> roleCourses, List<String> courseIds, String roleName) {
+            String userId, List<Course> roleCourses, List<String> courseIds, String roleName) {
         if (courseIds.isEmpty()) {
             return List.of();
         }
@@ -221,10 +259,25 @@ public class CareerService {
         List<String> moduleIds = modules.stream().map(CourseModule::getModuleId).toList();
 
         List<MicroTask> tasks = microTaskRepository.findByModuleIdInAndTaskType(moduleIds, BLIND_TEST);
+        if (tasks.isEmpty()) {
+            tasks = microTaskRepository.findByModuleIdIn(moduleIds);
+        }
+
+        Map<String, MicroTaskResult> resultByTask = Map.of();
+        if (!tasks.isEmpty()) {
+            List<String> allTaskIds = tasks.stream().map(MicroTask::getTaskId).toList();
+            resultByTask = microTaskResultRepository.findByUserIdAndTaskIdIn(userId, allTaskIds).stream()
+                    .collect(Collectors.toMap(
+                            r -> r.getTaskId().trim(),
+                            r -> r,
+                            (a, b) -> a.getScore().compareTo(b.getScore()) >= 0 ? a : b));
+        }
+
         Map<String, List<MicroTask>> tasksByCourse = tasks.stream()
                 .filter(t -> moduleMap.containsKey(t.getModuleId()))
                 .collect(Collectors.groupingBy(t -> moduleMap.get(t.getModuleId()).getCourseId()));
 
+        Map<String, MicroTaskResult> finalResultByTask = resultByTask;
         return roleCourses.stream()
                 .map(course -> {
                     List<MicroTask> courseTasks = tasksByCourse.get(course.getCourseId());
@@ -235,23 +288,46 @@ public class CareerService {
                             .sorted(Comparator.comparing(MicroTask::getTaskId))
                             .map(t -> {
                                 CourseModule mod = moduleMap.get(t.getModuleId());
+                                MicroTaskResult res = finalResultByTask.get(t.getTaskId().trim());
+                                int taskBestScore = res != null && res.getScore() != null ? res.getScore().intValue() : 0;
+                                boolean taskPassed = res != null && res.getScore() != null
+                                        && res.getScore().compareTo(PASSING_SCORE) >= 0;
                                 Map<String, Object> tm = new LinkedHashMap<>();
                                 tm.put("taskId", t.getTaskId());
                                 tm.put("moduleId", t.getModuleId());
                                 tm.put("moduleTitle", mod != null ? mod.getTitle() : "");
                                 tm.put("timestampSeconds", t.getTimestampSeconds());
                                 tm.put("questionText", t.getQuestionText());
+                                tm.put("isPassed", taskPassed);
+                                tm.put("bestScore", taskBestScore);
+                                tm.put("completedAt", res != null ? res.getCompletedAt() : null);
                                 return tm;
                             })
                             .toList();
+
+                    int totalTasksCount = taskItems.size();
+                    int completedTasksCount = (int) taskItems.stream()
+                            .filter(tm -> Boolean.TRUE.equals(tm.get("isPassed")))
+                            .count();
+                    boolean isPassed = totalTasksCount > 0 && completedTasksCount == totalTasksCount;
+                    int bestScore = totalTasksCount == 0
+                            ? 0
+                            : (int) Math.round(taskItems.stream()
+                                    .mapToInt(tm -> (int) tm.get("bestScore"))
+                                    .average()
+                                    .orElse(0));
 
                     Map<String, Object> card = new LinkedHashMap<>();
                     card.put("testId", "bt-" + course.getCourseId());
                     card.put("courseId", course.getCourseId());
                     card.put("title", "Blind Test: " + course.getTitle());
                     card.put("typeCourse", roleName);
-                    card.put("durationMin", Math.max(10, taskItems.size() * 10));
-                    card.put("passingScore", 75);
+                    card.put("durationMin", Math.max(10, totalTasksCount * 10));
+                    card.put("passingScore", PASSING_SCORE.intValue());
+                    card.put("isPassed", isPassed);
+                    card.put("bestScore", bestScore);
+                    card.put("completedTasksCount", completedTasksCount);
+                    card.put("totalTasksCount", totalTasksCount);
                     card.put("tasks", taskItems);
                     return card;
                 })

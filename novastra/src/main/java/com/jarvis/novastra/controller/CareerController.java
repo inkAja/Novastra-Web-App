@@ -23,7 +23,7 @@ public class CareerController {
     @GetMapping("/{userId}")
     public ResponseEntity<Map<String, Object>> getCareer(@PathVariable String userId) {
         try {
-            return ResponseEntity.ok(careerService.getCareerData(userId));
+            return ResponseEntity.ok(careerService.getCareerRoadmap(userId));
         } catch (NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
         } catch (IllegalArgumentException e) {

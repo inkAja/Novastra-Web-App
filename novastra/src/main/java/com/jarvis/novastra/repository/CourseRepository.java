@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CourseRepository extends JpaRepository<Course, String> {
     Optional<Course> findByTitle(String title);
     List<Course> findByTypeCourse(String typeCourse);
+    List<Course> findByTypeCourseIgnoreCase(String typeCourse);
+    Optional<Course> findTopByCourseIdStartingWithOrderByCourseIdDesc(String prefix);
 }

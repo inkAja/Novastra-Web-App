@@ -2,16 +2,17 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   function renderProgressRing(pct) {
+    const safePct = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
     const r = 38;
     const circ = 2 * Math.PI * r;
-    const offset = circ - (pct / 100) * circ;
+    const offset = circ - (safePct / 100) * circ;
     return `
       <svg width="96" height="96" viewBox="0 0 96 96" class="shrink-0">
         <circle cx="48" cy="48" r="${r}" fill="none" stroke="#EFE8DF" stroke-width="8"></circle>
         <circle cx="48" cy="48" r="${r}" fill="none" stroke="#D97757" stroke-width="8"
           stroke-linecap="round" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
           transform="rotate(-90 48 48)"></circle>
-        <text x="48" y="53" text-anchor="middle" font-size="18" font-weight="800" fill="#2C2A27">${pct}%</text>
+        <text x="48" y="53" text-anchor="middle" font-size="18" font-weight="800" fill="#2C2A27">${safePct}%</text>
       </svg>
     `;
   }
@@ -33,6 +34,9 @@
       streakCount: Number(session.streakCount ?? 0),
       averageProgress: 0,
       activeCoursesCount: 0,
+      careerReadinessPercentage: 0,
+      careerCompletedCoursesCount: 0,
+      careerTotalCoursesCount: 0,
       enrolledCourses: [],
       isOnboarded: Boolean(session.isOnboarded)
     };
@@ -72,11 +76,12 @@
 
     const streak = Number(dashboard.streakCount ?? 0);
     const xp = Number(dashboard.totalXp ?? 0);
-    const avgProgress = Number(dashboard.averageProgress ?? 0);
+    const careerPct = Math.max(0, Math.min(100, Math.round(Number(dashboard.careerReadinessPercentage ?? 0))));
+    const careerCompleted = Number(dashboard.careerCompletedCoursesCount ?? 0);
+    const careerTotal = Number(dashboard.careerTotalCoursesCount ?? 0);
     const enrolledCourses = Array.isArray(dashboard.enrolledCourses)
       ? dashboard.enrolledCourses
       : (Array.isArray(dashboard.enrollments) ? dashboard.enrollments : []);
-    const activeCount = Number(dashboard.activeCoursesCount ?? enrolledCourses.length);
     const roleLabel = dashboard.roleName || 'Belum dipilih';
 
     document.querySelectorAll('[data-nv-streak]').forEach((el) => {
@@ -117,12 +122,15 @@
 
       <section class="p-6 rounded-3xl bg-white border border-[#E8E2DA] shadow-sm grid grid-cols-1 lg:grid-cols-3 gap-6 items-center animate-fade-slide-in">
         <div class="flex items-center gap-5 lg:col-span-2">
-          ${renderProgressRing(avgProgress)}
+          ${renderProgressRing(careerPct)}
           <div>
             <p class="text-xs font-extrabold uppercase tracking-wider text-[#8A9A86]">Career Readiness Dashboard</p>
             <h2 class="text-lg md:text-xl font-black text-[#2C2A27] mt-0.5">${esc(roleLabel)}</h2>
-            <p class="text-xs text-[#6B6560] mt-1">${activeCount} kursus aktif · ${avgProgress}% rata-rata progres</p>
-            <div class="mt-3 flex flex-wrap gap-2">
+            <p class="text-xs text-[#6B6560] mt-1">${careerCompleted} dari ${careerTotal} kursus karier selesai · ${careerPct}% progres karier</p>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <a href="/career" id="home-go-career" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#D97757] hover:opacity-95 text-xs font-extrabold text-white shadow-sm transition-opacity">
+                Go to Career →
+              </a>
               <a href="/quiz" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F5F0EA] hover:bg-[#FDF0EB] text-xs font-bold text-[#2C2A27]">
                 <i data-lucide="users" class="w-3.5 h-3.5 text-[#D97757]"></i> Latihan Peer
               </a>

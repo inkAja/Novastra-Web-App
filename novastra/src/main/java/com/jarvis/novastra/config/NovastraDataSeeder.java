@@ -28,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class NovastraDataSeeder implements CommandLineRunner {
 
     private static final String BLIND_TEST = "BLIND_TEST";
+    private static final String VIDEO_CHECKPOINT = "VIDEO_CHECKPOINT";
+    private static final int CHECKPOINT_SECONDS = 300;
 
     private final CareerRoleRepository careerRoleRepository;
     private final SkillRepository skillRepository;
@@ -79,7 +81,192 @@ public class NovastraDataSeeder implements CommandLineRunner {
         for (RoleBundle bundle : masterCatalog()) {
             seedRoleBundle(bundle);
         }
+        seedCurriculumAndSkillsForAllRoles();
         seedDefaultModulesForCoursesWithoutModules();
+        seedCheckpointMicroTasksForAllModules();
+    }
+
+    private void seedCurriculumAndSkillsForAllRoles() {
+        String latestCourseId = courseRepository.findTopByCourseIdStartingWithOrderByCourseIdDesc("CS")
+                .map(Course::getCourseId)
+                .orElse(null);
+        String latestModuleId = courseModuleRepository.findTopByModuleIdStartingWithOrderByModuleIdDesc("MD")
+                .map(CourseModule::getModuleId)
+                .orElse(null);
+        String latestSkillId = skillRepository.findTopBySkillIdStartingWithOrderBySkillIdDesc("SL")
+                .map(Skill::getSkillId)
+                .orElse(null);
+        String latestBlindTestId = microTaskRepository.findTopByTaskIdStartingWithOrderByTaskIdDesc("BT")
+                .map(MicroTask::getTaskId)
+                .orElse(null);
+        String latestProjectId = portfolioProjectRepository.findTopByProjectIdStartingWithOrderByProjectIdDesc("PJ")
+                .map(PortfolioProject::getProjectId)
+                .orElse(null);
+
+        List<CareerRole> allRoles = careerRoleRepository.findAll().stream()
+                .sorted(Comparator.comparing(CareerRole::getRoleId))
+                .toList();
+
+        for (CareerRole role : allRoles) {
+            String roleName = role.getRoleName();
+            if (skillRepository.findByCategoryIgnoreCase(roleName).size() < 6
+                    || careerSkillCalculationRepository.findByRoleId(role.getRoleId()).size() < 6) {
+                for (SkillSeed s : skillsForDynamicRole(roleName)) {
+                    Skill skill = skillRepository.findBySkillNameAndCategory(s.name(), roleName).orElse(null);
+                    if (skill == null) {
+                        latestSkillId = AuthService.nextId("SL", latestSkillId);
+                        skill = ensureSkill(latestSkillId, s.name(), roleName);
+                    }
+                    ensureCareerSkill(role.getRoleId(), skill.getSkillId(), s.targetLevel());
+                }
+            }
+
+            if (courseRepository.findByTypeCourseIgnoreCase(roleName).isEmpty()) {
+                for (CourseSeed c : coursesForDynamicRole(roleName)) {
+                    latestCourseId = AuthService.nextId("CS", latestCourseId);
+                    Course course = ensureCourse(latestCourseId, c.title(), roleName, c.instructor(), c.durationMinutes());
+
+                    CourseModule firstModule = null;
+                    for (ModuleSeed m : c.modules()) {
+                        latestModuleId = AuthService.nextId("MD", latestModuleId);
+                        String videoUrl = "https://www.youtube.com/embed/novastra-" + course.getCourseId().toLowerCase() + "-" + m.order();
+                        CourseModule mod = ensureModule(latestModuleId, course.getCourseId(), m.title(), videoUrl, m.durationSeconds(), m.order());
+                        if (m.order() == 1) {
+                            firstModule = mod;
+                        }
+                    }
+
+                    if (firstModule != null) {
+                        for (TaskSeed t : c.firstModuleBlindTests()) {
+                            latestBlindTestId = AuthService.nextId("BT", latestBlindTestId);
+                            String q = t.questionText().length() > 255 ? t.questionText().substring(0, 255) : t.questionText();
+                            ensureMicroTask(latestBlindTestId, firstModule.getModuleId(), t.timestampSeconds(), q);
+                        }
+                    }
+
+                    latestProjectId = AuthService.nextId("PJ", latestProjectId);
+                    ensurePortfolioProject(latestProjectId, course.getCourseId(), c.project().title(), c.project().expectedOutput());
+                }
+            }
+        }
+    }
+
+    private static List<SkillSeed> skillsForDynamicRole(String roleName) {
+        if ("Senior UI/UX Designer".equalsIgnoreCase(roleName)) {
+            return List.of(
+                    new SkillSeed("", "Wireframing & User Flows", 88),
+                    new SkillSeed("", "Design Systems & Tokens", 92),
+                    new SkillSeed("", "UX Research & Usability Testing", 86),
+                    new SkillSeed("", "Interaction & Micro-Animation", 82),
+                    new SkillSeed("", "WCAG Accessibility Audit", 84),
+                    new SkillSeed("", "Product Discovery & Prototyping", 90));
+        }
+        if ("Full-Stack Web Developer".equalsIgnoreCase(roleName)) {
+            return List.of(
+                    new SkillSeed("", "HTML, CSS & Responsive UI", 90),
+                    new SkillSeed("", "JavaScript & TypeScript", 92),
+                    new SkillSeed("", "React & Next.js Frontend", 88),
+                    new SkillSeed("", "Backend REST API & Auth", 86),
+                    new SkillSeed("", "Relational SQL & Schema Design", 85),
+                    new SkillSeed("", "Deployment & Web Performance", 80));
+        }
+        return List.of(
+                new SkillSeed("", roleName + " Fundamentals", 90),
+                new SkillSeed("", "Applied " + roleName + " Workflow", 88),
+                new SkillSeed("", roleName + " Architecture & Systems", 85),
+                new SkillSeed("", roleName + " Testing & QA", 83),
+                new SkillSeed("", roleName + " Performance & Scaling", 80),
+                new SkillSeed("", roleName + " Portfolio Case Study", 78));
+    }
+
+    private static List<CourseSeed> coursesForDynamicRole(String roleName) {
+        List<ModuleSeed> defaultMods = List.of(
+                new ModuleSeed("", "1. Fondasi & Konsep Inti", "", 900, 1),
+                new ModuleSeed("", "2. Studi Kasus Implementasi Nyata", "", 1080, 2),
+                new ModuleSeed("", "3. Praktik & Uji Kompetensi", "", 1200, 3));
+
+        if ("Senior UI/UX Designer".equalsIgnoreCase(roleName)) {
+            return List.of(
+                    new CourseSeed("", "[Beginner] UI/UX Foundations & Figma Systems", "Nadia Kusuma", 280, defaultMods,
+                            List.of(
+                                    new TaskSeed("", 120, "Bagaimana design tokens menjaga konsistensi warna dan tipografi lintas tim produk?"),
+                                    new TaskSeed("", 260, "Jelaskan cara menyusun hierarki informasi dari user flow ke wireframe low-fidelity.")),
+                            new ProjectSeed("", "UI Design Token Kit", "Pustaka komponen Figma modular lengkap dengan token warna, spasi, dan tipografi.")),
+                    new CourseSeed("", "[Intermediate] User Research & Interactive Prototyping", "Maya Putri", 340, defaultMods,
+                            List.of(
+                                    new TaskSeed("", 140, "Kapan moderated usability testing lebih tepat dibandingkan unmoderated remote test?"),
+                                    new TaskSeed("", 290, "Identifikasi friction utama pada alur checkout 4 langkah berdasarkan metrik drop-off.")),
+                            new ProjectSeed("", "Usability Research Dossier", "Laporan riset user interview dan prototipe interaktif teruji task completion rate.")),
+                    new CourseSeed("", "[Advanced] Design Ops & Accessibility Audit", "Nadia Kusuma", 390, defaultMods,
+                            List.of(
+                                    new TaskSeed("", 160, "Mengapa rasio kontras minimum 4.5:1 penting pada komponen form dan state error?"),
+                                    new TaskSeed("", 310, "Rancang checklist handoff developer agar spesifikasi spacing dan state tidak ambigu.")),
+                            new ProjectSeed("", "WCAG Design Ops Playbook", "Dokumentasi audit aksesibilitas WCAG AA dan alur handoff Figma ke frontend.")));
+        }
+        if ("Full-Stack Web Developer".equalsIgnoreCase(roleName)) {
+            return List.of(
+                    new CourseSeed("", "[Beginner] Modern Web & TypeScript Foundations", "Rizky Pratama", 300, defaultMods,
+                            List.of(
+                                    new TaskSeed("", 120, "Bagaimana Semantic HTML dan TypeScript strict mode mencegah bug runtime di UI?"),
+                                    new TaskSeed("", 260, "Bedakan state lokal komponen dan state server dalam arsitektur aplikasi web modern.")),
+                            new ProjectSeed("", "Type-Safe Web Component App", "Aplikasi web responsif TypeScript tanpa error tipe dan lulus audit semantic HTML.")),
+                    new CourseSeed("", "[Intermediate] Full-Stack API & PostgreSQL Integration", "Dimas Pratama", 360, defaultMods,
+                            List.of(
+                                    new TaskSeed("", 145, "Bagaimana desain endpoint RESTful memisahkan validasi DTO input dari model database?"),
+                                    new TaskSeed("", 300, "Mengapa index foreign key dan constraint idempotency penting pada alur registrasi/order?")),
+                            new ProjectSeed("", "Full-Stack CRUD & Auth Platform", "Web app end-to-end terhubung REST API dan PostgreSQL dengan alur autentikasi.")),
+                    new CourseSeed("", "[Advanced] Scalable Deployment, Caching & Security", "Bima Santoso", 420, defaultMods,
+                            List.of(
+                                    new TaskSeed("", 170, "Jelaskan mitigasi CORS misconfiguration, XSS, dan CSRF pada aplikasi full-stack produksi."),
+                                    new TaskSeed("", 320, "Bagaimana strategi caching API mengurangi latency p95 tanpa menyajikan data basi?")),
+                            new ProjectSeed("", "Production Full-Stack Stack", "Pipeline CI/CD full-stack lengkap dengan optimasi query, security headers, dan monitoring.")));
+        }
+        return List.of(
+                new CourseSeed("", "[Beginner] " + roleName + " Foundations", "Tim Mentor Novastra", 280, defaultMods,
+                        List.of(
+                                new TaskSeed("", 120, "Jelaskan prinsip dasar dan alur kerja utama pada jalur " + roleName + "."),
+                                new TaskSeed("", 260, "Sebutkan contoh kesalahan umum pemula di bidang " + roleName + " dan cara mencegahnya.")),
+                        new ProjectSeed("", "Capstone Dasar: " + roleName, "Dokumen implementasi fondasi dan studi kasus awal " + roleName + ".")),
+                new CourseSeed("", "[Intermediate] Applied " + roleName + " Workflow", "Tim Mentor Novastra", 340, defaultMods,
+                        List.of(
+                                new TaskSeed("", 140, "Bagaimana memecah studi kasus nyata " + roleName + " menjadi deliverable terukur?"),
+                                new TaskSeed("", 290, "Uraikan metode validasi kualitas sebelum deliverable " + roleName + " dirilis.")),
+                        new ProjectSeed("", "Proyek Terapan: " + roleName, "Portofolio implementasi skenario bisnis nyata untuk peran " + roleName + ".")),
+                new CourseSeed("", "[Advanced] Production " + roleName + " Mastery", "Tim Mentor Novastra", 400, defaultMods,
+                        List.of(
+                                new TaskSeed("", 160, "Identifikasi bottleneck skalabilitas utama pada proyek kompleks " + roleName + "."),
+                                new TaskSeed("", 310, "Rancang metrik evaluasi dampak bisnis untuk solusi " + roleName + ".")),
+                        new ProjectSeed("", "Production Case: " + roleName, "Studi kasus akhir siap review industri lengkap dengan metrik evaluasi.")));
+    }
+
+    private void seedCheckpointMicroTasksForAllModules() {
+        String latestTaskId = microTaskRepository.findTopByTaskIdStartingWithOrderByTaskIdDesc("MT")
+                .map(MicroTask::getTaskId)
+                .orElse(null);
+
+        List<CourseModule> modules = courseModuleRepository.findAll().stream()
+                .sorted(Comparator.comparing(CourseModule::getModuleId))
+                .toList();
+
+        for (CourseModule mod : modules) {
+            if (microTaskRepository.existsByModuleIdAndTimestampSeconds(mod.getModuleId(), CHECKPOINT_SECONDS)) {
+                continue;
+            }
+            latestTaskId = AuthService.nextId("MT", latestTaskId);
+            String title = mod.getTitle() != null ? mod.getTitle().trim() : mod.getModuleId();
+            String question = "Checkpoint Menit 5 (" + title
+                    + "): Jelaskan konsep inti dan langkah penerapan paling penting dari materi ini.";
+            if (question.length() > 255) {
+                question = question.substring(0, 255);
+            }
+            MicroTask task = new MicroTask();
+            task.setTaskId(latestTaskId);
+            task.setModuleId(mod.getModuleId());
+            task.setTimestampSeconds(CHECKPOINT_SECONDS);
+            task.setQuestionText(question);
+            task.setTaskType(VIDEO_CHECKPOINT);
+            microTaskRepository.save(task);
+        }
     }
 
     private void seedDefaultModulesForCoursesWithoutModules() {

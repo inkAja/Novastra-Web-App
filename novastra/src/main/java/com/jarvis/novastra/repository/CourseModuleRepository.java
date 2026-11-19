@@ -10,6 +10,7 @@ public interface CourseModuleRepository extends JpaRepository<CourseModule, Stri
     List<CourseModule> findByCourseIdOrderBySequenceOrderAsc(String courseId);
     long countByCourseId(String courseId);
     Optional<CourseModule> findTopByOrderByModuleIdDesc();
+    Optional<CourseModule> findTopByModuleIdStartingWithOrderByModuleIdDesc(String prefix);
     Optional<CourseModule> findByCourseIdAndSequenceOrder(String courseId, Integer sequenceOrder);
     List<CourseModule> findByCourseIdInOrderByCourseIdAscSequenceOrderAsc(Collection<String> courseIds);
 }

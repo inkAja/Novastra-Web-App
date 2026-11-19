@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SkillRepository extends JpaRepository<Skill, String> {
     Optional<Skill> findBySkillNameAndCategory(String skillName, String category);
     List<Skill> findByCategory(String category);
+    List<Skill> findByCategoryIgnoreCase(String category);
+    Optional<Skill> findTopBySkillIdStartingWithOrderBySkillIdDesc(String prefix);
 }

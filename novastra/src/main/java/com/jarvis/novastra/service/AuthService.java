@@ -55,7 +55,7 @@ public class AuthService {
         return user;
     }
 
-    // shortcut: 5-char sequential ID fits up to 99 rows per prefix; widen column/use sequence before exceeding 99
+    // shortcut: CHAR(5) ID fits up to 99 rows (3-char prefix) or 999 rows (2-char prefix); widen column before exceeding
     public static String nextId(String prefix, String latestId) {
         int next = 1;
         if (latestId != null && latestId.startsWith(prefix)) {
@@ -64,6 +64,7 @@ public class AuthService {
             } catch (NumberFormatException ignored) {
             }
         }
-        return String.format("%s%02d", prefix, next);
+        int digits = Math.max(1, 5 - prefix.length());
+        return String.format("%s%0" + digits + "d", prefix, next);
     }
 }
