@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CourseModuleRepository extends JpaRepository<CourseModule, String> {
     List<CourseModule> findByCourseIdOrderBySequenceOrderAsc(String courseId);
+    long countByCourseId(String courseId);
+    Optional<CourseModule> findTopByOrderByModuleIdDesc();
     Optional<CourseModule> findByCourseIdAndSequenceOrder(String courseId, Integer sequenceOrder);
     List<CourseModule> findByCourseIdInOrderByCourseIdAscSequenceOrderAsc(Collection<String> courseIds);
 }

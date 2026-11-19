@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.jarvis.novastra.config.NovastraDataSeeder;
@@ -23,7 +24,9 @@ import com.jarvis.novastra.repository.UserSkillGapRepository;
 import com.jarvis.novastra.service.AuthService;
 import com.jarvis.novastra.service.CareerService;
 import com.jarvis.novastra.service.DashboardService;
+import com.jarvis.novastra.service.EnrollmentService;
 import com.jarvis.novastra.service.OnboardingService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -69,6 +72,9 @@ class NovastraApplicationTests {
 
 	@Autowired
 	private CareerService careerService;
+
+	@Autowired
+	private EnrollmentService enrollmentService;
 
 	@Autowired
 	private NovastraDataSeeder dataSeeder;
@@ -120,6 +126,11 @@ class NovastraApplicationTests {
 			List<String> moduleIds = modules.stream().map(CourseModule::getModuleId).toList();
 			assertEquals(6, microTaskRepository.findByModuleIdInAndTaskType(moduleIds, "BLIND_TEST").size(), roleName);
 			assertEquals(3, portfolioProjectRepository.findByCourseIdIn(courseIds).size(), roleName);
+		}
+
+		for (Course course : courseRepository.findAll()) {
+			assertTrue(courseModuleRepository.countByCourseId(course.getCourseId()) >= 3,
+					"Expected >= 3 modules for course " + course.getCourseId());
 		}
 	}
 
@@ -178,6 +189,76 @@ class NovastraApplicationTests {
 		assertEquals(2450, existingDashboard.get("totalXp"));
 		assertEquals(14, existingDashboard.get("streakCount"));
 		assertEquals(2, ((List<?>) existingDashboard.get("enrollments")).size());
+	}
+
+	@Test
+	@Transactional
+	void enrollCompleteModuleAndDashboardSyncFlow() {
+		User user = authService.register("Test Enroll User", "enroll.test@novastra.id", "secret123");
+		CareerRole role = careerRoleRepository.findByRoleName("Backend Engineer (Java)").orElseThrow();
+		List<Skill> skills = skillRepository.findByCategory(role.getRoleName());
+		onboardingService.saveOnboarding(user.getUserId(), role.getRoleId(), 30, 1, List.of(skills.get(0).getSkillId()));
+
+		Map<String, Object> first = enrollmentService.enroll(user.getUserId(), "CRS14");
+		assertEquals(false, first.get("alreadyEnrolled"));
+		assertEquals(0, ((BigDecimal) first.get("progressPercentage")).intValue());
+
+		Map<String, Object> duplicate = enrollmentService.enroll(user.getUserId(), "CRS14");
+		assertEquals(true, duplicate.get("alreadyEnrolled"));
+		assertEquals(first.get("enrollmentId"), duplicate.get("enrollmentId"));
+
+		List<Map<String, Object>> userEnrollments = enrollmentService.getEnrollmentsByUser(user.getUserId());
+		assertEquals(1, userEnrollments.size());
+		assertEquals("[Beginner] Java 21 OOP & Clean Architecture", userEnrollments.get(0).get("title"));
+
+		Map<String, Object> modResult = enrollmentService.completeModule(user.getUserId(), "CRS14", "MOD20");
+		assertTrue(((BigDecimal) modResult.get("progressPercentage")).compareTo(BigDecimal.valueOf(30)) > 0);
+		assertEquals(50, modResult.get("xpAwarded"));
+		assertEquals(50, modResult.get("totalXp"));
+		assertEquals(1, modResult.get("streakCount"));
+
+		String enrollmentId = String.valueOf(first.get("enrollmentId"));
+		Map<String, Object> clamped = enrollmentService.updateProgress(enrollmentId, BigDecimal.valueOf(150), 25);
+		assertEquals(0, BigDecimal.valueOf(100).compareTo((BigDecimal) clamped.get("progressPercentage")));
+		assertEquals(25, clamped.get("xpAwarded"));
+		assertEquals(75, clamped.get("totalXp"));
+
+		Map<String, Object> repeatAtHundred = enrollmentService.updateProgress(enrollmentId, BigDecimal.valueOf(100), 50);
+		assertEquals(0, repeatAtHundred.get("xpAwarded"));
+		assertEquals(75, repeatAtHundred.get("totalXp"));
+
+		Map<String, Object> dash = dashboardService.getDashboard(user.getUserId());
+		assertEquals(1, dash.get("activeCoursesCount"));
+		assertEquals(100, dash.get("averageProgress"));
+		assertEquals(1, ((List<?>) dash.get("enrolledCourses")).size());
+	}
+
+	@Test
+	@Transactional
+	void legacyCourseHasModulesAndCompleteModuleAutoEnrollsAndAwardsXp() {
+		List<CourseModule> crs01Modules = courseModuleRepository.findByCourseIdOrderBySequenceOrderAsc("CRS01");
+		assertTrue(crs01Modules.size() >= 3, "Expected default modules seeded for pre-existing course CRS01");
+
+		User user = authService.register("Legacy Course User", "legacy.crs01@novastra.id", "secret123");
+		CareerRole role = careerRoleRepository.findByRoleName("Frontend & PWA Developer").orElseThrow();
+		List<Skill> skills = skillRepository.findByCategory(role.getRoleName());
+		onboardingService.saveOnboarding(user.getUserId(), role.getRoleId(), 20, 1, List.of(skills.get(0).getSkillId()));
+
+		String firstModuleId = crs01Modules.get(0).getModuleId();
+		Map<String, Object> result = enrollmentService.completeModule(user.getUserId(), "CRS01", firstModuleId);
+		BigDecimal pct = (BigDecimal) result.get("progressPercentage");
+		assertTrue(pct.compareTo(BigDecimal.valueOf(30)) > 0 && pct.compareTo(BigDecimal.valueOf(40)) < 0);
+		assertEquals(50, result.get("xpAwarded"));
+		assertEquals(50, result.get("totalXp"));
+
+		Map<String, Object> dash = dashboardService.getDashboard(user.getUserId());
+		assertEquals(1, dash.get("activeCoursesCount"));
+		assertTrue((Integer) dash.get("averageProgress") > 0);
+
+		java.util.NoSuchElementException missingCourse = assertThrows(
+				java.util.NoSuchElementException.class,
+				() -> enrollmentService.completeModule(user.getUserId(), "CRS99", firstModuleId));
+		assertEquals("Course tidak ditemukan.", missingCourse.getMessage());
 	}
 
 }

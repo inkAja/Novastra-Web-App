@@ -202,3 +202,22 @@ INSERT INTO public.portfolio_project (project_id, course_id, title, expected_out
   ('PRJ24', 'CRS24', 'Cohort Retention Executive Deck', 'Dashboard interaktif + ringkasan temuan bisnis dalam 5 slide eksekutif.'),
   ('PRJ25', 'CRS25', 'Automated KPI Anomaly Monitor', 'Skrip analisis statistik otomatis untuk validasi A/B test dan deteksi anomali KPI.')
 ON CONFLICT (project_id) DO NOTHING;
+
+-- 8. Default Modules for pre-existing courses without modules (CRS01-CRS04)
+INSERT INTO public.modules (module_id, course_id, title, video_url, duration_seconds, sequence_order) VALUES
+  ('MOD56', 'CRS01', '1. Fondasi & Konsep Inti', 'https://www.youtube.com/embed/novastra-crs01-1', 900, 1),
+  ('MOD57', 'CRS01', '2. Studi Kasus Implementasi Nyata', 'https://www.youtube.com/embed/novastra-crs01-2', 1080, 2),
+  ('MOD58', 'CRS01', '3. Praktik & Uji Kompetensi', 'https://www.youtube.com/embed/novastra-crs01-3', 1200, 3),
+
+  ('MOD59', 'CRS02', '1. Fondasi & Konsep Inti', 'https://www.youtube.com/embed/novastra-crs02-1', 900, 1),
+  ('MOD60', 'CRS02', '2. Studi Kasus Implementasi Nyata', 'https://www.youtube.com/embed/novastra-crs02-2', 1080, 2),
+  ('MOD61', 'CRS02', '3. Praktik & Uji Kompetensi', 'https://www.youtube.com/embed/novastra-crs02-3', 1200, 3),
+
+  ('MOD62', 'CRS03', '1. Fondasi & Konsep Inti', 'https://www.youtube.com/embed/novastra-crs03-1', 900, 1),
+  ('MOD63', 'CRS03', '2. Studi Kasus Implementasi Nyata', 'https://www.youtube.com/embed/novastra-crs03-2', 1080, 2),
+  ('MOD64', 'CRS03', '3. Praktik & Uji Kompetensi', 'https://www.youtube.com/embed/novastra-crs03-3', 1200, 3),
+
+  ('MOD65', 'CRS04', '1. Fondasi & Konsep Inti', 'https://www.youtube.com/embed/novastra-crs04-1', 900, 1),
+  ('MOD66', 'CRS04', '2. Studi Kasus Implementasi Nyata', 'https://www.youtube.com/embed/novastra-crs04-2', 1080, 2),
+  ('MOD67', 'CRS04', '3. Praktik & Uji Kompetensi', 'https://www.youtube.com/embed/novastra-crs04-3', 1200, 3)
+ON CONFLICT (module_id) DO NOTHING;

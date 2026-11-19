@@ -43,4 +43,14 @@ public class Enrollment {
 
     public LocalDate getEnrolledAt() { return enrolledAt; }
     public void setEnrolledAt(LocalDate enrolledAt) { this.enrolledAt = enrolledAt; }
+
+    public boolean advanceProgress(BigDecimal nextProgress) {
+        BigDecimal current = progressPercentage != null ? progressPercentage : BigDecimal.ZERO;
+        BigDecimal clamped = nextProgress.max(BigDecimal.ZERO).min(BigDecimal.valueOf(100));
+        if (clamped.compareTo(current) <= 0) {
+            return false;
+        }
+        this.progressPercentage = clamped;
+        return true;
+    }
 }

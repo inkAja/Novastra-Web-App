@@ -3,8 +3,15 @@
 
   const state = {
     course: null,
+    fromDb: false,
+    courseProgress: 0,
+    enrollmentId: null,
+    completing: false,
+    feedbackMsg: '',
+    loadError: '',
     modules: [],
     activeLesson: null,
+    activeModuleId: null,
     playing: false,
     progressPct: 18,
     speed: 1,
@@ -73,25 +80,50 @@
 
   function render() {
     const main = document.getElementById('main-content');
-    if (!main || !state.course) return;
+    if (!main) return;
+    if (!state.course) {
+      main.innerHTML = `
+        <div class="rounded-3xl bg-white border border-[#E8E2DA] p-8 max-w-xl">
+          <p class="text-sm font-black text-[#2C2A27]">Course belum tersedia</p>
+          <p class="text-xs text-[#6B6560] mt-1">${esc(state.loadError || 'Course tidak ditemukan di database.')}</p>
+          <a href="/courses" class="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-xl bg-[#D97757] text-white text-xs font-extrabold">Kembali ke Katalog Courses</a>
+        </div>`;
+      return;
+    }
 
     const D = window.NOVASTRA_DATA || {};
     const store = window.NovastraStore;
-    const fm = (D.FIELD_META || {})[state.course.field] || { label: state.course.field, color: '#D97757', bg: '#FDF0EB' };
-    const lessonId = state.activeLesson?.id || 'l-def-1';
-    const isCompleted = store?.isLessonCompleted?.(state.course.id, lessonId) || false;
+    const cid = state.course.courseId || state.course.id;
+    const fm = (D.FIELD_META || {})[state.course.field] || {
+      label: state.course.typeCourse || state.course.field || 'Course',
+      color: '#D97757',
+      bg: '#FDF0EB'
+    };
+    const lessonId = state.activeModuleId || state.activeLesson?.moduleId || state.activeLesson?.id || null;
+    const hasModule = Boolean(lessonId);
+    const isCompleted = hasModule && (store?.isLessonCompleted?.(cid, lessonId) || false);
     const allLessons = state.modules.flatMap((m) => m.items || []);
+    const coursePct = Math.round(state.courseProgress);
 
     main.innerHTML = `
+      ${state.feedbackMsg ? `<div class="mb-4 p-3.5 rounded-2xl bg-[#F0F3EF] border border-[#8A9A86]/50 text-xs font-bold text-[#5E7C6B]">${esc(state.feedbackMsg)}</div>` : ''}
+
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
-          <span class="px-2.5 py-1 rounded-full text-[11px] font-bold" style="background:${fm.bg};color:${fm.color}">${esc(fm.label)}</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <a href="/home" class="text-xs font-bold text-[#6B6560] hover:text-[#D97757]">← Kembali ke Home</a>
+            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold" style="background:${fm.bg};color:${fm.color}">${esc(fm.label)}</span>
+          </div>
           <h1 class="text-xl md:text-2xl font-black text-[#2C2A27] mt-2">${esc(state.course.title)}</h1>
-          <p class="text-xs text-[#6B6560] mt-0.5">Instruktur: ${esc(state.course.instructor)} · ${esc(state.course.level)} · ${esc(state.course.duration)}</p>
+          <p class="text-xs text-[#6B6560] mt-0.5">Instruktur: ${esc(state.course.instructorName || state.course.instructor || '-')} · ${esc(state.course.duration ?? '')} mnt · Progres Course: <span class="font-extrabold text-[#D97757]">${coursePct}%</span></p>
         </div>
         <button type="button" id="cd-open-classroom" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FDF0EB] border border-[#F2A68D] text-[#D97757] text-xs font-extrabold hover:bg-[#D97757] hover:text-white transition-colors shrink-0 cursor-pointer">
           <i data-lucide="video" class="w-4 h-4"></i> Bootcamp Cohort &amp; Live Classroom
         </button>
+      </div>
+
+      <div class="mb-5 h-2 rounded-full bg-[#F5F0EA] overflow-hidden">
+        <div class="h-full rounded-full bg-[#8A9A86] transition-all duration-300" style="width:${coursePct}%"></div>
       </div>
 
       <div class="grid grid-cols-1 min-[900px]:grid-cols-[64fr_36fr] gap-6 items-start">
@@ -99,9 +131,9 @@
           <div class="rounded-3xl overflow-hidden bg-[#2C2A27] border border-[#E8E2DA] shadow-sm">
             <div class="relative aspect-video bg-gradient-to-br from-[#2C2A27] via-[#3A3530] to-[#1F1D1B] flex flex-col items-center justify-center p-6 text-white">
               <div class="text-center max-w-md">
-                <span class="px-2.5 py-1 rounded-full bg-white/10 text-[11px] font-bold text-[#F2A68D]">${esc(state.activeLesson?.duration || '20 mnt')}</span>
+                <span class="px-2.5 py-1 rounded-full bg-white/10 text-[11px] font-bold text-[#F2A68D]">${esc(state.activeLesson?.duration || (hasModule ? '15 mnt' : 'Belum ada modul'))}</span>
                 <h2 class="text-lg md:text-xl font-extrabold mt-2">${esc(state.activeLesson?.title || state.course.title)}</h2>
-                <p class="text-xs text-white/70 mt-1">${state.playing ? `Memutar pada kecepatan ${state.speed}x` : 'Klik Play untuk memulai simulasi materi'}</p>
+                <p class="text-xs text-white/70 mt-1">${!hasModule ? 'Belum ada modul di database untuk course ini' : state.playing ? `Memutar pada kecepatan ${state.speed}x` : 'Klik Play untuk memulai materi modul'}</p>
               </div>
               <button type="button" id="cd-play-center" class="mt-4 w-14 h-14 rounded-full bg-[#D97757] hover:scale-105 text-white flex items-center justify-center shadow-lg transition-transform cursor-pointer" aria-label="Play atau Pause">
                 <i data-lucide="${state.playing ? 'pause' : 'play'}" class="w-6 h-6"></i>
@@ -140,9 +172,9 @@
                   </button>
                 </div>
 
-                <button type="button" id="cd-mark-complete" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${isCompleted ? 'bg-[#8A9A86] text-white border-[#8A9A86]' : 'bg-white text-[#2C2A27] border-[#E8E2DA] hover:border-[#D97757]'}">
+                <button type="button" id="cd-mark-complete" ${(!hasModule || state.completing) ? 'disabled' : ''} class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${isCompleted ? 'bg-[#8A9A86] text-white border-[#8A9A86]' : 'bg-[#D97757] text-white border-[#D97757] hover:opacity-95'} disabled:opacity-60 disabled:cursor-not-allowed">
                   <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-                  <span>${isCompleted ? 'Completed' : 'Mark Completed'}</span>
+                  <span>${state.completing ? 'Menyimpan...' : !hasModule ? 'Modul Belum Tersedia' : isCompleted ? 'Modul Selesai ✓' : 'Tandai Selesai (+50 XP)'}</span>
                 </button>
               </div>
             </div>
@@ -158,10 +190,7 @@
             </button>
             ${state.overviewOpen ? `
               <div class="px-5 pb-5 pt-1 border-t border-[#E8E2DA] text-xs text-[#6B6560] space-y-2 leading-relaxed">
-                <p>${esc(state.course.desc)}</p>
-                <div class="flex flex-wrap gap-1.5 pt-1">
-                  ${(state.course.tags || []).map((t) => `<span class="px-2.5 py-0.5 rounded-full bg-[#F5F0EA] text-[#2C2A27] font-bold">${esc(t)}</span>`).join('')}
-                </div>
+                <p>${esc(state.course.desc || `Pelajari ${state.course.title} bersama ${state.course.instructorName || 'instruktur Novastra'}.`)}</p>
               </div>
             ` : ''}
           </div>
@@ -179,7 +208,7 @@
           </div>
 
           <div class="p-4 max-h-[640px] overflow-y-auto">
-            ${state.rightTab === 'upnext' ? renderUpNext(allLessons) : state.rightTab === 'discussion' ? renderDiscussion() : renderMicroTasks()}
+            ${state.rightTab === 'upnext' ? renderUpNext(cid) : state.rightTab === 'discussion' ? renderDiscussion() : renderMicroTasks()}
           </div>
         </aside>
       </div>
@@ -188,21 +217,26 @@
       ${state.classroomOpen ? renderClassroomModal() : ''}
     `;
 
-    bindEvents(allLessons);
+    bindEvents(allLessons, cid);
     if (window.lucide) window.lucide.createIcons();
   }
 
-  function renderUpNext() {
+  function renderUpNext(cid) {
     const store = window.NovastraStore;
+    const allItems = state.modules.flatMap((mod) => mod.items || []);
+    if (!allItems.length) {
+      return '<p class="text-xs text-[#6B6560] py-6 text-center">Belum ada modul di database untuk course ini.</p>';
+    }
     return state.modules.map((mod) => `
       <div class="mb-4 last:mb-0">
         <p class="text-[11px] font-extrabold uppercase tracking-wider text-[#A89F98] mb-2">${esc(mod.module)}</p>
         <div class="space-y-2">
           ${(mod.items || []).map((item) => {
-            const active = state.activeLesson?.id === item.id;
-            const done = store?.isLessonCompleted?.(state.course.id, item.id);
+            const itemId = item.moduleId ?? item.id;
+            const active = (state.activeModuleId || state.activeLesson?.moduleId || state.activeLesson?.id) === itemId;
+            const done = store?.isLessonCompleted?.(cid, itemId);
             return `
-              <button type="button" data-lesson-id="${esc(item.id)}" class="w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-2 cursor-pointer ${active ? 'bg-[#FDF0EB] border-[#D97757]' : 'bg-[#FAF8F5] border-[#E8E2DA] hover:border-[#D97757]/60'}">
+              <button type="button" data-lesson-id="${esc(itemId)}" class="w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-2 cursor-pointer ${active ? 'bg-[#FDF0EB] border-[#D97757]' : 'bg-[#FAF8F5] border-[#E8E2DA] hover:border-[#D97757]/60'}">
                 <div class="min-w-0">
                   <p class="text-xs font-extrabold text-[#2C2A27] truncate">${esc(item.title)}</p>
                   <p class="text-[11px] text-[#6B6560] mt-0.5">${esc(item.duration)}</p>
@@ -347,7 +381,62 @@
     `;
   }
 
-  function bindEvents(allLessons) {
+  async function markActiveModuleComplete(cid) {
+    const lid = state.activeModuleId || state.activeLesson?.moduleId || state.activeLesson?.id;
+    const session = window.getSession?.();
+    if (!lid) {
+      state.feedbackMsg = 'Modul belum tersedia untuk course ini.';
+      render();
+      return;
+    }
+    const alreadyDone = window.NovastraStore?.isLessonCompleted?.(cid, lid);
+
+    if (!session || session.isGuest || !state.fromDb) {
+      window.NovastraStore?.toggleLesson?.(cid, lid);
+      window.NovastraStore?.touchStreak?.();
+      render();
+      return;
+    }
+
+    if (alreadyDone) {
+      state.feedbackMsg = `Modul "${state.activeLesson?.title}" sudah selesai. Pilih modul berikutnya di panel Up Next.`;
+      render();
+      return;
+    }
+
+    state.completing = true;
+    render();
+
+    try {
+      const res = await fetch(`/api/courses/${encodeURIComponent(cid)}/modules/${encodeURIComponent(lid)}/complete`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: session.userId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+
+      window.NovastraStore?.completeLesson?.(cid, lid);
+      state.courseProgress = Number(data.progressPercentage ?? state.courseProgress);
+      window.saveSession?.({
+        totalXp: data.totalXp ?? session.totalXp,
+        streakCount: data.streakCount ?? session.streakCount
+      });
+      document.querySelectorAll('[data-nv-streak]').forEach((el) => {
+        el.textContent = `${data.streakCount ?? 0}d`;
+      });
+      const xpNote = data.xpAwarded > 0 ? `+${data.xpAwarded} XP! ` : '';
+      state.feedbackMsg = `${xpNote}Progres course diperbarui menjadi ${Math.round(state.courseProgress)}%.`;
+    } catch (err) {
+      state.feedbackMsg = `Gagal menyimpan progres: ${err.message}`;
+    } finally {
+      state.completing = false;
+    }
+    render();
+  }
+
+  function bindEvents(allLessons, cid) {
     const togglePlay = () => {
       state.playing = !state.playing;
       syncPlayInterval();
@@ -379,12 +468,7 @@
       render();
     });
 
-    document.getElementById('cd-mark-complete')?.addEventListener('click', () => {
-      const lid = state.activeLesson?.id || 'l-def-1';
-      window.NovastraStore?.toggleLesson?.(state.course.id, lid);
-      window.NovastraStore?.touchStreak?.();
-      render();
-    });
+    document.getElementById('cd-mark-complete')?.addEventListener('click', () => markActiveModuleComplete(cid));
 
     document.getElementById('cd-toggle-overview')?.addEventListener('click', () => {
       state.overviewOpen = !state.overviewOpen;
@@ -400,7 +484,11 @@
 
     document.querySelectorAll('[data-lesson-id]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        state.activeLesson = allLessons.find((l) => l.id === btn.dataset.lessonId) || state.activeLesson;
+        const picked = allLessons.find((l) => (l.moduleId ?? l.id) === btn.dataset.lessonId);
+        if (picked) {
+          state.activeLesson = picked;
+          state.activeModuleId = picked.moduleId ?? picked.id;
+        }
         state.progressPct = 0;
         render();
       });
@@ -455,8 +543,7 @@
     document.getElementById('mt-submit')?.addEventListener('click', () => {
       if (state.activeMicroTask) {
         state.activeMicroTask.done = true;
-        window.NovastraStore?.completeLesson?.(state.course.id, state.activeMicroTask.id);
-        window.NovastraStore?.enrollCourse?.(state.course.id);
+        window.NovastraStore?.completeLesson?.(cid, state.activeMicroTask.id);
         state.activeMicroTask = null;
         render();
       }
@@ -484,15 +571,60 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.requireAuth && !window.requireAuth({ requireOnboarded: true })) return;
-    const D = window.NOVASTRA_DATA || {};
-    const courses = D.COURSES || [];
-    const id = new URLSearchParams(window.location.search).get('id');
-    state.course = courses.find((c) => c.id === id) || courses[0];
-    if (!state.course) return;
-    state.modules = D.CURRICULUM?.[state.course.id] || D.CURRICULUM?.default || [];
-    state.activeLesson = state.modules[0]?.items?.[0] || { id: 'l-def-1', title: state.course.title, duration: '20 mnt' };
+  document.addEventListener('DOMContentLoaded', async () => {
+    const session = window.requireAuth?.({ requireOnboarded: true });
+    if (!session) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('courseId') || params.get('id');
+
+    if (!id) {
+      state.loadError = 'Parameter courseId tidak ditemukan pada URL.';
+      render();
+      return;
+    }
+
+    const dbCourse = await (window.apiFetch ? window.apiFetch(`/api/courses/${encodeURIComponent(id)}`, null) : Promise.resolve(null));
+    if (!dbCourse || !dbCourse.courseId) {
+      state.loadError = `Course "${id}" tidak ditemukan di database.`;
+      render();
+      return;
+    }
+
+    state.course = dbCourse;
+    state.fromDb = true;
+    const dbModules = await (window.apiFetch ? window.apiFetch(`/api/courses/${encodeURIComponent(dbCourse.courseId)}/modules`, []) : Promise.resolve([]));
+    const items = Array.isArray(dbModules)
+      ? dbModules
+          .filter((m) => m && (m.moduleId || m.id))
+          .map((m) => {
+            const mid = m.moduleId ?? m.id;
+            return {
+              moduleId: mid,
+              id: mid,
+              title: m.title,
+              videoUrl: m.videoUrl,
+              duration: `${Math.max(1, Math.round((m.durationSeconds || 600) / 60))} mnt`
+            };
+          })
+      : [];
+
+    state.modules = items.length ? [{ module: 'Kurikulum Modul', items }] : [];
+    state.activeLesson = items[0] || null;
+    state.activeModuleId = items[0] ? (items[0].moduleId ?? items[0].id) : null;
+    if (!items.length) {
+      state.feedbackMsg = 'Belum ada modul di database untuk course ini.';
+    }
+
+    if (!session.isGuest && session.userId) {
+      const enrollments = await (window.apiFetch ? window.apiFetch(`/api/enrollments/user/${encodeURIComponent(session.userId)}`, []) : Promise.resolve([]));
+      const match = Array.isArray(enrollments) ? enrollments.find((e) => e.courseId === dbCourse.courseId) : null;
+      if (match) {
+        state.enrollmentId = match.enrollmentId;
+        state.courseProgress = Number(match.progressPercentage ?? 0);
+      }
+    }
+
     render();
   });
 })();

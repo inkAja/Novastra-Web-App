@@ -56,7 +56,7 @@ public class AuthService {
     }
 
     // shortcut: 5-char sequential ID fits up to 99 rows per prefix; widen column/use sequence before exceeding 99
-    static String nextId(String prefix, String latestId) {
+    public static String nextId(String prefix, String latestId) {
         int next = 1;
         if (latestId != null && latestId.startsWith(prefix)) {
             try {

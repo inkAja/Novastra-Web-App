@@ -41,6 +41,11 @@ public class PageController {
         return "course-detail";
     }
 
+    @GetMapping("/course-detail.html")
+    public String courseDetailHtml() {
+        return "course-detail";
+    }
+
     @GetMapping("/quiz")
     public String quiz() {
         return "quiz";

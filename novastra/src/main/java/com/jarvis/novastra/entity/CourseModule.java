@@ -47,4 +47,6 @@ public class CourseModule {
 
     public Integer getSequenceOrder() { return sequenceOrder; }
     public void setSequenceOrder(Integer sequenceOrder) { this.sequenceOrder = sequenceOrder; }
+
+    public String getId() { return moduleId; }
 }

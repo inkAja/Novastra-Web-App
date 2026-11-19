@@ -79,4 +79,12 @@ public class User {
     public void setJoinedAt(LocalDate joinedAt) { this.joinedAt = joinedAt; }
 
     public boolean isOnboarded() { return roleId != null && !roleId.isBlank(); }
+
+    public void awardXp(int xp) {
+        if (xp <= 0) return;
+        this.totalXp = (this.totalXp != null ? this.totalXp : 0) + xp;
+        if (this.streakCount == null || this.streakCount <= 0) {
+            this.streakCount = 1;
+        }
+    }
 }

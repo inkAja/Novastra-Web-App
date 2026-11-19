@@ -72,6 +72,24 @@
     });
   }
 
+  async function fetchUserEnrollments(userId) {
+    return request(`/enrollments/user/${encodeURIComponent(userId)}`);
+  }
+
+  async function updateEnrollmentProgress(enrollmentId, progressPercentage, xpBonus = 50) {
+    return request(`/enrollments/${encodeURIComponent(enrollmentId)}/progress`, {
+      method: 'PATCH',
+      body: JSON.stringify({ progressPercentage, xpBonus })
+    });
+  }
+
+  async function completeCourseModule(courseId, moduleId, userId) {
+    return request(`/courses/${encodeURIComponent(courseId)}/modules/${encodeURIComponent(moduleId)}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ userId })
+    });
+  }
+
   async function renderCourseList(containerId = 'course-list') {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -99,6 +117,9 @@
     fetchCourses,
     fetchCourseModules,
     enrollCourse,
+    fetchUserEnrollments,
+    updateEnrollmentProgress,
+    completeCourseModule,
     renderCourseList
   };
 })();

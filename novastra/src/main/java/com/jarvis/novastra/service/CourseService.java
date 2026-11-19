@@ -5,6 +5,7 @@ import com.jarvis.novastra.entity.CourseModule;
 import com.jarvis.novastra.repository.CourseModuleRepository;
 import com.jarvis.novastra.repository.CourseRepository;
 import java.util.List;
+import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,7 +23,12 @@ public class CourseService {
         return courseRepository.findAll();
     }
 
+    public Course getCourseById(String courseId) {
+        return courseRepository.findById(courseId.trim())
+                .orElseThrow(() -> new NoSuchElementException("Course tidak ditemukan."));
+    }
+
     public List<CourseModule> getModulesByCourseId(String courseId) {
-        return courseModuleRepository.findByCourseIdOrderBySequenceOrderAsc(courseId);
+        return courseModuleRepository.findByCourseIdOrderBySequenceOrderAsc(courseId.trim());
     }
 }

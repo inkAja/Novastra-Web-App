@@ -16,7 +16,7 @@
     `;
   }
 
-  async function init() {
+  async function loadAndRender(statusNotice = '') {
     const main = document.getElementById('main-content');
     if (!main) return;
 
@@ -32,8 +32,8 @@
       totalXp: Number(session.totalXp ?? 0),
       streakCount: Number(session.streakCount ?? 0),
       averageProgress: 0,
-      enrolledCount: 0,
-      enrollments: [],
+      activeCoursesCount: 0,
+      enrolledCourses: [],
       isOnboarded: Boolean(session.isOnboarded)
     };
 
@@ -73,7 +73,10 @@
     const streak = Number(dashboard.streakCount ?? 0);
     const xp = Number(dashboard.totalXp ?? 0);
     const avgProgress = Number(dashboard.averageProgress ?? 0);
-    const enrollments = Array.isArray(dashboard.enrollments) ? dashboard.enrollments : [];
+    const enrolledCourses = Array.isArray(dashboard.enrolledCourses)
+      ? dashboard.enrolledCourses
+      : (Array.isArray(dashboard.enrollments) ? dashboard.enrollments : []);
+    const activeCount = Number(dashboard.activeCoursesCount ?? enrolledCourses.length);
     const roleLabel = dashboard.roleName || 'Belum dipilih';
 
     document.querySelectorAll('[data-nv-streak]').forEach((el) => {
@@ -82,14 +85,21 @@
 
     const courses = await (window.apiFetch ? window.apiFetch('/api/courses', D.COURSES || []) : Promise.resolve(D.COURSES || []));
     const fieldMeta = D.FIELD_META || {};
-    const enrollmentMap = new Map(enrollments.map((e) => [e.courseId, Number(e.progressPercentage ?? 0)]));
-    const forYou = courses.slice(0, 6);
+    const enrollmentMap = new Map(enrolledCourses.map((e) => [e.courseId, Number(e.progressPercentage ?? 0)]));
+
+    const sortedCourses = [...courses].sort((a, b) => {
+      const aMatch = (a.typeCourse || a.field) === dashboard.roleName ? 0 : 1;
+      const bMatch = (b.typeCourse || b.field) === dashboard.roleName ? 0 : 1;
+      return aMatch - bMatch;
+    });
+    const forYou = sortedCourses.slice(0, 6);
 
     const hour = new Date().getHours();
     const greeting = hour < 11 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : hour < 19 ? 'Selamat sore' : 'Selamat malam';
 
     main.innerHTML = `
       ${apiWarning ? `<div class="p-3.5 rounded-2xl bg-[#FAF3E7] border border-[#C4904B]/40 text-xs font-bold text-[#8B622B]">${esc(apiWarning)}</div>` : ''}
+      ${statusNotice ? `<div class="p-3.5 rounded-2xl bg-[#F0F3EF] border border-[#8A9A86]/50 text-xs font-bold text-[#5E7C6B]">${esc(statusNotice)}</div>` : ''}
 
       <section class="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-slide-in">
         <div>
@@ -97,7 +107,7 @@
             <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Jalur Karier: ${esc(roleLabel)}
           </span>
           <h1 class="text-2xl md:text-3xl font-black tracking-tight text-[#2C2A27]">${greeting}, ${esc(dashboard.fullName)}</h1>
-          <p class="text-sm text-[#6B6560] mt-1">${enrollments.length ? 'Lanjutkan progres harian Anda untuk siap menghadapi Proof-of-Work Blind Test.' : 'Mulai pilih course pertama Anda untuk membangun progres belajar.'}</p>
+          <p class="text-sm text-[#6B6560] mt-1">${enrolledCourses.length ? 'Lanjutkan progres harian Anda untuk siap menghadapi Proof-of-Work Blind Test.' : 'Klik salah satu course di bawah untuk mendaftar dan mulai membangun progres belajar.'}</p>
         </div>
         <div class="flex items-center gap-2.5">
           <a href="/courses" class="px-4 py-2.5 rounded-xl bg-white border border-[#E8E2DA] hover:border-[#D97757] text-xs font-extrabold text-[#2C2A27]">Jelajahi Kursus</a>
@@ -111,7 +121,7 @@
           <div>
             <p class="text-xs font-extrabold uppercase tracking-wider text-[#8A9A86]">Career Readiness Dashboard</p>
             <h2 class="text-lg md:text-xl font-black text-[#2C2A27] mt-0.5">${esc(roleLabel)}</h2>
-            <p class="text-xs text-[#6B6560] mt-1">${enrollments.length} kursus aktif · ${avgProgress}% rata-rata progres</p>
+            <p class="text-xs text-[#6B6560] mt-1">${activeCount} kursus aktif · ${avgProgress}% rata-rata progres</p>
             <div class="mt-3 flex flex-wrap gap-2">
               <a href="/quiz" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F5F0EA] hover:bg-[#FDF0EB] text-xs font-bold text-[#2C2A27]">
                 <i data-lucide="users" class="w-3.5 h-3.5 text-[#D97757]"></i> Latihan Peer
@@ -143,30 +153,34 @@
         </div>
       </section>
 
-      <section>
+      <section id="my-courses-section">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-lg font-black text-[#2C2A27]">Kursus Saya</h2>
           <a href="/courses" class="text-xs font-bold text-[#D97757] hover:underline">Cari kursus →</a>
         </div>
-        ${enrollments.length ? `
+        ${enrolledCourses.length ? `
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            ${enrollments.map((e) => {
+            ${enrolledCourses.map((e) => {
               const pct = Math.round(Number(e.progressPercentage ?? 0));
               return `
-                <a href="/course-detail?id=${encodeURIComponent(e.courseId)}" class="p-5 rounded-2xl bg-white border border-[#E8E2DA] hover:border-[#D97757] transition-all flex flex-col justify-between group">
+                <a href="/course-detail?courseId=${encodeURIComponent(e.courseId)}" class="p-5 rounded-2xl bg-white border border-[#E8E2DA] hover:border-[#D97757] transition-all flex flex-col justify-between group">
                   <div>
-                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FDF0EB] text-[#D97757]">${esc(e.typeCourse || 'Course')}</span>
-                    <h3 class="text-base font-extrabold text-[#2C2A27] group-hover:text-[#D97757] leading-snug mt-3">${esc(e.title)}</h3>
-                    <p class="text-xs text-[#6B6560] mt-1">${esc(e.instructorName || '')}</p>
+                    <div class="flex items-center justify-between gap-2 mb-3">
+                      <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FDF0EB] text-[#D97757]">${esc(e.typeCourse || 'Course')}</span>
+                      <span class="text-xs font-extrabold text-[#5E7C6B]">${pct >= 100 ? 'Selesai' : 'Aktif'}</span>
+                    </div>
+                    <h3 class="text-base font-extrabold text-[#2C2A27] group-hover:text-[#D97757] leading-snug">${esc(e.title)}</h3>
+                    <p class="text-xs text-[#6B6560] mt-1">${esc(e.instructorName || '')}${e.duration ? ` · ${esc(e.duration)} mnt` : ''}</p>
                   </div>
-                  <div class="mt-4 pt-3 border-t border-[#E8E2DA]">
-                    <div class="flex items-center justify-between text-[11px] font-bold text-[#6B6560] mb-1.5">
+                  <div class="mt-4 pt-3 border-t border-[#E8E2DA] space-y-2.5">
+                    <div class="flex items-center justify-between text-[11px] font-bold text-[#6B6560]">
                       <span>Progres</span>
                       <span>${pct}%</span>
                     </div>
-                    <div class="h-1.5 rounded-full bg-[#F5F0EA] overflow-hidden">
-                      <div class="h-full rounded-full bg-[#D97757]" style="width:${pct}%"></div>
+                    <div class="h-2 rounded-full bg-[#F5F0EA] overflow-hidden">
+                      <div class="h-full rounded-full bg-[#D97757] transition-all" style="width:${pct}%"></div>
                     </div>
+                    <span class="inline-flex items-center gap-1 text-xs font-extrabold text-[#D97757]">Lanjut Belajar →</span>
                   </div>
                 </a>
               `;
@@ -175,7 +189,7 @@
         ` : `
           <div class="p-6 rounded-2xl bg-white border border-dashed border-[#E8E2DA] text-center space-y-2">
             <p class="text-sm font-extrabold text-[#2C2A27]">Belum ada course yang diikuti</p>
-            <p class="text-xs text-[#6B6560]">Pilih course dari katalog di bawah untuk mulai belajar dan mengumpulkan XP.</p>
+            <p class="text-xs text-[#6B6560]">Klik salah satu course pada bagian For You Courses di bawah untuk langsung mendaftar.</p>
             <a href="/courses" class="inline-block mt-2 px-4 py-2 rounded-xl bg-[#D97757] text-white text-xs font-extrabold">Jelajahi Katalog Course</a>
           </div>
         `}
@@ -192,10 +206,11 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           ${forYou.map((c) => {
             const cid = c.id ?? c.courseId;
-            const fm = fieldMeta[c.field] || { label: c.field || 'Course', color: '#D97757', bg: '#FDF0EB' };
+            const fm = fieldMeta[c.field] || { label: c.typeCourse || c.field || 'Course', color: '#D97757', bg: '#FDF0EB' };
+            const isEnrolled = enrollmentMap.has(cid);
             const progress = Math.round(enrollmentMap.get(cid) ?? 0);
             return `
-              <a href="/course-detail?id=${encodeURIComponent(cid)}" class="p-5 rounded-2xl bg-white border border-[#E8E2DA] hover:border-[#D97757] transition-all flex flex-col justify-between group">
+              <div data-course-card="${esc(cid)}" data-enrolled="${isEnrolled}" class="p-5 rounded-2xl bg-white border border-[#E8E2DA] hover:border-[#D97757] transition-all flex flex-col justify-between group cursor-pointer">
                 <div>
                   <div class="flex items-center justify-between gap-2 mb-3">
                     <span class="px-2.5 py-1 rounded-full text-[11px] font-bold" style="background:${fm.bg};color:${fm.color}">${esc(fm.label)}</span>
@@ -204,24 +219,78 @@
                   <h3 class="text-base font-extrabold text-[#2C2A27] group-hover:text-[#D97757] leading-snug">${esc(c.title)}</h3>
                   <p class="text-xs text-[#6B6560] mt-2 line-clamp-2">${esc(c.desc || c.instructorName || '')}</p>
                 </div>
-                <div class="mt-4 pt-3 border-t border-[#E8E2DA]">
-                  <div class="flex items-center justify-between text-[11px] font-bold text-[#6B6560] mb-1.5">
-                    <span>${esc(c.level || c.typeCourse || '')} · ${esc(c.duration ?? '')}</span>
+                <div class="mt-4 pt-3 border-t border-[#E8E2DA] space-y-2.5">
+                  <div class="flex items-center justify-between text-[11px] font-bold text-[#6B6560]">
+                    <span>${esc(c.level || c.typeCourse || '')} · ${esc(c.duration ?? '')} mnt</span>
                     <span>${progress}%</span>
                   </div>
                   <div class="h-1.5 rounded-full bg-[#F5F0EA] overflow-hidden">
                     <div class="h-full rounded-full bg-[#D97757]" style="width:${progress}%"></div>
                   </div>
+                  ${isEnrolled ? `
+                    <a href="/course-detail?courseId=${encodeURIComponent(cid)}" class="block w-full text-center py-2 rounded-xl bg-[#F0F3EF] text-[#5E7C6B] text-xs font-extrabold">Lanjut Belajar →</a>
+                  ` : `
+                    <button type="button" data-enroll-course="${esc(cid)}" class="w-full py-2 rounded-xl bg-[#D97757] hover:opacity-95 text-white text-xs font-extrabold cursor-pointer">Ikuti Kursus</button>
+                  `}
                 </div>
-              </a>
+              </div>
             `;
           }).join('')}
         </div>
       </section>
     `;
 
+    const handleEnroll = async (courseId, triggerEl) => {
+      if (isGuest) {
+        window.location.href = `/course-detail?courseId=${encodeURIComponent(courseId)}`;
+        return;
+      }
+      if (triggerEl) {
+        triggerEl.disabled = true;
+        triggerEl.textContent = 'Mendaftarkan...';
+      }
+      try {
+        const res = await fetch('/api/enrollments', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: session.userId, courseId })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+        await loadAndRender(`Berhasil mengikuti "${data.title || courseId}". Course ditambahkan ke Kursus Saya.`);
+        document.getElementById('my-courses-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        if (triggerEl) {
+          triggerEl.disabled = false;
+          triggerEl.textContent = 'Ikuti Kursus';
+        }
+        await loadAndRender(`Gagal mendaftar course: ${err.message}`);
+      }
+    };
+
+    main.querySelectorAll('[data-course-card]').forEach((card) => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('a') || e.target.closest('button')) return;
+        const cid = card.dataset.courseCard;
+        if (card.dataset.enrolled === 'true') {
+          window.location.href = `/course-detail?courseId=${encodeURIComponent(cid)}`;
+        } else {
+          const btn = card.querySelector('[data-enroll-course]');
+          handleEnroll(cid, btn);
+        }
+      });
+    });
+
+    main.querySelectorAll('[data-enroll-course]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleEnroll(btn.dataset.enrollCourse, btn);
+      });
+    });
+
     if (window.lucide) window.lucide.createIcons();
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => loadAndRender());
 })();

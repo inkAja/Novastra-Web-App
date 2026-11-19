@@ -14,8 +14,11 @@ import com.jarvis.novastra.repository.CourseRepository;
 import com.jarvis.novastra.repository.MicroTaskRepository;
 import com.jarvis.novastra.repository.PortfolioProjectRepository;
 import com.jarvis.novastra.repository.SkillRepository;
+import com.jarvis.novastra.service.AuthService;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -75,6 +78,38 @@ public class NovastraDataSeeder implements CommandLineRunner {
     public void run(String... args) {
         for (RoleBundle bundle : masterCatalog()) {
             seedRoleBundle(bundle);
+        }
+        seedDefaultModulesForCoursesWithoutModules();
+    }
+
+    private void seedDefaultModulesForCoursesWithoutModules() {
+        String latestModuleId = courseModuleRepository.findTopByOrderByModuleIdDesc()
+                .map(CourseModule::getModuleId)
+                .orElse(null);
+
+        String[] titles = {
+                "1. Fondasi & Konsep Inti",
+                "2. Studi Kasus Implementasi Nyata",
+                "3. Praktik & Uji Kompetensi"
+        };
+        int[] durations = {900, 1080, 1200};
+
+        List<Course> courses = courseRepository.findAll().stream()
+                .sorted(Comparator.comparing(Course::getCourseId))
+                .toList();
+
+        for (Course course : courses) {
+            String courseId = course.getCourseId();
+            if (courseModuleRepository.countByCourseId(courseId) > 0) {
+                continue;
+            }
+            String slug = courseId.toLowerCase();
+            for (int i = 0; i < titles.length; i++) {
+                int seq = i + 1;
+                latestModuleId = AuthService.nextId("MOD", latestModuleId);
+                ensureModule(latestModuleId, courseId, titles[i],
+                        "https://www.youtube.com/embed/novastra-" + slug + "-" + seq, durations[i], seq);
+            }
         }
     }
 

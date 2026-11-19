@@ -1,13 +1,9 @@
 package com.jarvis.novastra.service;
 
 import com.jarvis.novastra.entity.CareerRole;
-import com.jarvis.novastra.entity.Course;
-import com.jarvis.novastra.entity.Enrollment;
 import com.jarvis.novastra.entity.User;
 import com.jarvis.novastra.entity.UserSkillGap;
 import com.jarvis.novastra.repository.CareerRoleRepository;
-import com.jarvis.novastra.repository.CourseRepository;
-import com.jarvis.novastra.repository.EnrollmentRepository;
 import com.jarvis.novastra.repository.UserRepository;
 import com.jarvis.novastra.repository.UserSkillGapRepository;
 import java.math.BigDecimal;
@@ -16,7 +12,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,20 +19,17 @@ public class DashboardService {
 
     private final UserRepository userRepository;
     private final CareerRoleRepository careerRoleRepository;
-    private final EnrollmentRepository enrollmentRepository;
-    private final CourseRepository courseRepository;
+    private final EnrollmentService enrollmentService;
     private final UserSkillGapRepository userSkillGapRepository;
 
     public DashboardService(
             UserRepository userRepository,
             CareerRoleRepository careerRoleRepository,
-            EnrollmentRepository enrollmentRepository,
-            CourseRepository courseRepository,
+            EnrollmentService enrollmentService,
             UserSkillGapRepository userSkillGapRepository) {
         this.userRepository = userRepository;
         this.careerRoleRepository = careerRoleRepository;
-        this.enrollmentRepository = enrollmentRepository;
-        this.courseRepository = courseRepository;
+        this.enrollmentService = enrollmentService;
         this.userSkillGapRepository = userSkillGapRepository;
     }
 
@@ -53,34 +45,14 @@ public class DashboardService {
                 ? careerRoleRepository.findById(user.getRoleId()).map(CareerRole::getRoleName).orElse(null)
                 : null;
 
-        List<Enrollment> rawEnrollments = enrollmentRepository.findByUserId(uid);
-        Map<String, Course> courseMap = rawEnrollments.isEmpty()
-                ? Map.of()
-                : courseRepository.findAllById(
-                        rawEnrollments.stream().map(Enrollment::getCourseId).collect(Collectors.toSet()))
-                        .stream()
-                        .collect(Collectors.toMap(Course::getCourseId, c -> c));
-
-        List<Map<String, Object>> enrollments = rawEnrollments.stream().map((e) -> {
-            Course c = courseMap.get(e.getCourseId());
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("enrollmentId", e.getEnrollmentId());
-            item.put("courseId", e.getCourseId());
-            item.put("progressPercentage", e.getProgressPercentage() != null ? e.getProgressPercentage() : BigDecimal.ZERO);
-            item.put("enrolledAt", e.getEnrolledAt());
-            item.put("title", c != null ? c.getTitle() : e.getCourseId());
-            item.put("typeCourse", c != null ? c.getTypeCourse() : null);
-            item.put("instructorName", c != null ? c.getInstructorName() : null);
-            item.put("duration", c != null ? c.getDuration() : null);
-            return item;
-        }).toList();
+        List<Map<String, Object>> enrolledCourses = enrollmentService.getEnrollmentsByUser(uid);
 
         int averageProgress = 0;
-        if (!rawEnrollments.isEmpty()) {
-            BigDecimal sum = rawEnrollments.stream()
-                    .map((e) -> e.getProgressPercentage() != null ? e.getProgressPercentage() : BigDecimal.ZERO)
+        if (!enrolledCourses.isEmpty()) {
+            BigDecimal sum = enrolledCourses.stream()
+                    .map(e -> (BigDecimal) e.getOrDefault("progressPercentage", BigDecimal.ZERO))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            averageProgress = sum.divide(BigDecimal.valueOf(rawEnrollments.size()), 0, RoundingMode.HALF_UP).intValue();
+            averageProgress = sum.divide(BigDecimal.valueOf(enrolledCourses.size()), 0, RoundingMode.HALF_UP).intValue();
         }
 
         List<UserSkillGap> skillGaps = userSkillGapRepository.findByUserId(uid);
@@ -97,8 +69,10 @@ public class DashboardService {
         payload.put("streakCount", user.getStreakCount() != null ? user.getStreakCount() : 0);
         payload.put("isOnboarded", user.isOnboarded());
         payload.put("averageProgress", averageProgress);
-        payload.put("enrolledCount", enrollments.size());
-        payload.put("enrollments", enrollments);
+        payload.put("activeCoursesCount", enrolledCourses.size());
+        payload.put("enrolledCourses", enrolledCourses);
+        payload.put("enrolledCount", enrolledCourses.size());
+        payload.put("enrollments", enrolledCourses);
         payload.put("skillGaps", skillGaps);
         return payload;
     }
