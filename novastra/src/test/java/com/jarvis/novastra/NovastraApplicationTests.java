@@ -11,6 +11,8 @@ import com.jarvis.novastra.config.NovastraDataSeeder;
 import com.jarvis.novastra.entity.CareerRole;
 import com.jarvis.novastra.entity.Course;
 import com.jarvis.novastra.entity.CourseModule;
+import com.jarvis.novastra.entity.PortfolioProject;
+import com.jarvis.novastra.entity.PortfolioSubmission;
 import com.jarvis.novastra.entity.Skill;
 import com.jarvis.novastra.entity.User;
 import com.jarvis.novastra.repository.CareerRoleRepository;
@@ -20,6 +22,7 @@ import com.jarvis.novastra.repository.CourseRepository;
 import com.jarvis.novastra.repository.MicroTaskRepository;
 import com.jarvis.novastra.repository.MicroTaskResultRepository;
 import com.jarvis.novastra.repository.PortfolioProjectRepository;
+import com.jarvis.novastra.repository.PortfolioSubmissionRepository;
 import com.jarvis.novastra.repository.SkillRepository;
 import com.jarvis.novastra.repository.UserRepository;
 import com.jarvis.novastra.repository.UserSkillGapRepository;
@@ -54,6 +57,9 @@ class NovastraApplicationTests {
 
 	@Autowired
 	private PortfolioProjectRepository portfolioProjectRepository;
+
+	@Autowired
+	private PortfolioSubmissionRepository portfolioSubmissionRepository;
 
 	@Autowired
 	private CareerRoleRepository careerRoleRepository;
@@ -486,6 +492,85 @@ class NovastraApplicationTests {
 		assertEquals(true, unlocked.get("isAllPowPassed"));
 		assertEquals(true, unlocked.get("canRunAiAudit"));
 		assertTrue(careerService.canUserRunAudit(user.getUserId()));
+	}
+
+	@Test
+	@Transactional
+	@SuppressWarnings("unchecked")
+	void portfolioProjectBriefsAndSubmissionFlowWorkEndToEnd() {
+		// 1. Every seeded PortfolioProject must carry structured instructions within VARCHAR(255)
+		List<PortfolioProject> allProjects = portfolioProjectRepository.findAll();
+		assertTrue(allProjects.size() >= 24);
+		for (PortfolioProject p : allProjects) {
+			String brief = p.getExpectedOutput();
+			assertTrue(brief.length() <= 255, "Brief exceeds VARCHAR(255) for " + p.getProjectId());
+			assertTrue(brief.contains("Tujuan Proyek:"), "Missing Tujuan Proyek for " + p.getProjectId());
+			assertTrue(brief.contains("Kriteria Wajib:"), "Missing Kriteria Wajib for " + p.getProjectId());
+			assertTrue(brief.contains("Format Pengumpulan:"), "Missing Format Pengumpulan for " + p.getProjectId());
+			int bulletCount = brief.split("\n- ", -1).length - 1;
+			assertEquals(3, bulletCount, "Expected 3 bullets for " + p.getProjectId());
+		}
+
+		// 2. Onboarded user gets 3 enriched portfolioProjects with courseTitle & NOT_SUBMITTED status
+		User user = authService.register("Portfolio Verifier", "portfolio.rol03@novastra.id", "secret123");
+		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
+		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+		onboardingService.saveOnboarding(
+				user.getUserId(), role.getRoleId(), 30, 1, List.of(roleSkills.get(0).getSkillId()));
+
+		Map<String, Object> roadmap = careerService.getCareerRoadmap(user.getUserId());
+		List<Map<String, Object>> projects = (List<Map<String, Object>>) roadmap.get("portfolioProjects");
+		assertEquals(3, projects.size());
+		Map<String, Object> firstProject = projects.get(0);
+		String projectId = String.valueOf(firstProject.get("projectId"));
+		assertFalse(String.valueOf(firstProject.get("courseTitle")).isBlank());
+		assertEquals("NOT_SUBMITTED", firstProject.get("status"));
+
+		// 3. Submitting before curriculum 100% and PoW pass is rejected with IllegalStateException
+		assertThrows(IllegalStateException.class, () -> careerService.submitPortfolioProject(
+				user.getUserId(), projectId, "https://github.com/novastra/sample-project"));
+
+		// Unlock prerequisites: pass all 3 Blind Tests and complete all 3 curriculum courses
+		List<Map<String, Object>> blindTests = (List<Map<String, Object>>) roadmap.get("blindTests");
+		for (Map<String, Object> bt : blindTests) {
+			List<Map<String, Object>> btTasks = (List<Map<String, Object>>) bt.get("tasks");
+			List<MicroTaskService.BlindTestAnswer> answers = btTasks.stream()
+					.map(t -> new MicroTaskService.BlindTestAnswer(
+							String.valueOf(t.get("taskId")),
+							"Implementasi solusi teknis lengkap dengan validasi dan pengujian."))
+					.toList();
+			microTaskService.submitBlindTest(user.getUserId(), answers);
+		}
+		for (Map<String, Object> cur : (List<Map<String, Object>>) roadmap.get("curriculum")) {
+			String eid = String.valueOf(enrollmentService.enroll(user.getUserId(), String.valueOf(cur.get("courseId"))).get("enrollmentId"));
+			enrollmentService.updateProgress(eid, BigDecimal.valueOf(100), 0);
+		}
+
+		// 4a. Blank and non-http(s) URLs throw IllegalArgumentException
+		assertThrows(IllegalArgumentException.class, () -> careerService.submitPortfolioProject(
+				user.getUserId(), projectId, "   "));
+		assertThrows(IllegalArgumentException.class, () -> careerService.submitPortfolioProject(
+				user.getUserId(), projectId, "ftp://invalid-host.example/repo"));
+
+		// 4b. Valid submission stores SUBMITTED status, score 0.00, and audit waiting note
+		Map<String, Object> firstSubmit = careerService.submitPortfolioProject(
+				user.getUserId(), projectId, "https://github.com/novastra/first-release");
+		assertEquals("SUBMITTED", firstSubmit.get("status"));
+		assertEquals(0, new BigDecimal("0.00").compareTo((BigDecimal) firstSubmit.get("score")));
+		assertEquals("Menunggu proses AI Audit...", firstSubmit.get("feedbackNotes"));
+
+		// 4c. Re-submission updates the single existing row without duplicating
+		String updatedUrl = "https://github.com/novastra/updated-release";
+		careerService.submitPortfolioProject(user.getUserId(), projectId, updatedUrl);
+		List<PortfolioSubmission> savedRows = portfolioSubmissionRepository.findByUserIdAndProjectIdIn(
+				user.getUserId(), List.of(projectId));
+		assertEquals(1, savedRows.size());
+		assertEquals(updatedUrl, savedRows.get(0).getExternalUrl());
+
+		Map<String, Object> refreshed = careerService.getCareerRoadmap(user.getUserId());
+		Map<String, Object> refreshedFirst = ((List<Map<String, Object>>) refreshed.get("portfolioProjects")).get(0);
+		assertEquals("SUBMITTED", refreshedFirst.get("status"));
+		assertEquals(updatedUrl, refreshedFirst.get("externalUrl"));
 	}
 
 }

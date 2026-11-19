@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -84,6 +85,7 @@ public class NovastraDataSeeder implements CommandLineRunner {
         seedCurriculumAndSkillsForAllRoles();
         seedDefaultModulesForCoursesWithoutModules();
         seedCheckpointMicroTasksForAllModules();
+        enrichPortfolioProjectInstructions();
     }
 
     private void seedCurriculumAndSkillsForAllRoles() {
@@ -413,10 +415,194 @@ public class NovastraDataSeeder implements CommandLineRunner {
             p.setProjectId(projectId);
             p.setCourseId(courseId);
             p.setTitle(title);
-            p.setExpectedOutput(expectedOutput);
+            p.setExpectedOutput(structuredBriefFor(title));
             portfolioProjectRepository.save(p);
         }
     }
+
+    private void enrichPortfolioProjectInstructions() {
+        List<PortfolioProject> allProjects = portfolioProjectRepository.findAll().stream()
+                .sorted(Comparator.comparing(PortfolioProject::getProjectId))
+                .toList();
+        for (PortfolioProject p : allProjects) {
+            String target = structuredBriefFor(p.getTitle());
+            if (!target.equals(p.getExpectedOutput())) {
+                p.setExpectedOutput(target);
+                portfolioProjectRepository.save(p);
+            }
+        }
+    }
+
+    private static String structuredBriefFor(String title) {
+        String key = title != null ? title.trim() : "";
+        String curated = PROJECT_BRIEFS.get(key);
+        if (curated != null) {
+            return curated;
+        }
+        String shortTitle = key.length() > 28 ? key.substring(0, 28).trim() : key;
+        return formatProjectBrief(
+                shortTitle.isEmpty() ? "Selesaikan proyek akhir jalur karier." : "Selesaikan capstone " + shortTitle + ".",
+                "Implementasi sesuai materi jalur",
+                "Bukti uji & dokumentasi README",
+                "Ringkasan hasil & metrik kerja",
+                "Repo GitHub / link demo / Figma.");
+    }
+
+    private static String formatProjectBrief(String goal, String d1, String d2, String d3, String format) {
+        String brief = "Tujuan Proyek: " + goal
+                + "\nKriteria Wajib:\n- " + d1
+                + "\n- " + d2
+                + "\n- " + d3
+                + "\nFormat Pengumpulan: " + format;
+        // shortcut: portfolio_project.expected_output is VARCHAR(255) in DB-Novastra; widen column to TEXT for longer briefs
+        return brief.length() > 255 ? brief.substring(0, 255) : brief;
+    }
+
+    private static final Map<String, String> PROJECT_BRIEFS = Map.ofEntries(
+            Map.entry("UI Design Token Kit", formatProjectBrief(
+                    "Bangun UI Design System modular berbasis token di Figma.",
+                    "Token warna, spasi & tipografi",
+                    "Varian tombol, input & kartu",
+                    "Panduan pakai & state interaktif",
+                    "Link Figma publik (view access).")),
+            Map.entry("Usability Research Dossier", formatProjectBrief(
+                    "Susun riset usability & prototipe alur checkout baru.",
+                    "Rangkuman wawancara min 5 user",
+                    "Analisis drop-off & friction",
+                    "Prototipe interaktif teruji task",
+                    "Link Figma prototype / Notion publik.")),
+            Map.entry("WCAG Design Ops Playbook", formatProjectBrief(
+                    "Susun audit aksesibilitas WCAG AA & alur handoff dev.",
+                    "Audit rasio kontras teks >=4.5:1",
+                    "Checklist spesifikasi spacing",
+                    "Dokumentasi state focus & error",
+                    "Link Figma / Notion / PDF publik.")),
+            Map.entry("Type-Safe Web Component App", formatProjectBrief(
+                    "Bangun web app responsif dengan TypeScript strict.",
+                    "Zero TypeScript strict errors",
+                    "Semantic HTML5 & navigasi mobile",
+                    "Unit test komponen UI utama",
+                    "Repo GitHub publik + URL Vercel/Netlify.")),
+            Map.entry("Full-Stack CRUD & Auth Platform", formatProjectBrief(
+                    "Bangun aplikasi web full-stack terhubung PostgreSQL.",
+                    "Auth register/login & proteksi API",
+                    "Operasi CRUD penuh + validasi DTO",
+                    "Skema relasi DB & error handling",
+                    "Repo GitHub + URL deployment aktif.")),
+            Map.entry("Production Full-Stack Stack", formatProjectBrief(
+                    "Siapkan deployment full-stack aman & siap produksi.",
+                    "Pipeline CI/CD otomatis di GitHub",
+                    "Optimasi index SQL & caching API",
+                    "Security headers, CORS & healthcheck",
+                    "Repo GitHub + URL demo / DockerHub.")),
+            Map.entry("Enterprise Design System Kit", formatProjectBrief(
+                    "Rancang sistem desain enterprise dengan atomic design.",
+                    "Hierarki atom, molekul & organisme",
+                    "Auto-layout & design tokens rapi",
+                    "Dokumentasi usage & do/don't",
+                    "Link Figma publik (view access).")),
+            Map.entry("SaaS Dashboard Full-Stack App", formatProjectBrief(
+                    "Bangun dashboard SaaS full-stack dengan Next.js.",
+                    "Auth & role-based route protection",
+                    "Tabel metrik & filter API dinamis",
+                    "Responsive layout + loading state",
+                    "Repo GitHub + URL Vercel/Netlify.")),
+            Map.entry("B2B Pitch Deck & Objection Script", formatProjectBrief(
+                    "Susun strategi negosiasi B2B kerangka Value-Pivot.",
+                    "Pitch deck 8-10 slide fokus ROI",
+                    "Skrip tangani 5 keberatan utama",
+                    "Simulasi call & follow-up email",
+                    "Link Google Slides/Docs atau PDF publik.")),
+            Map.entry("SEO Audit & Keyword Map Kit", formatProjectBrief(
+                    "Lakukan audit technical SEO & rencana konten 30 hari.",
+                    "Checklist 10 isu technical SEO",
+                    "Peta cluster keyword intent jelas",
+                    "Kalender editorial & on-page brief",
+                    "Link Google Sheets / Notion publik.")),
+            Map.entry("Full-Funnel Paid Ads Blueprint", formatProjectBrief(
+                    "Rancang arsitektur kampanye Meta & Google Ads terukur.",
+                    "Struktur funnel TOFU, MOFU, BOFU",
+                    "Konvensi tagging UTM & event GA4",
+                    "Target KPI ROAS, CPA & copy variasi",
+                    "Link Notion / Google Slides / Sheet.")),
+            Map.entry("Omnichannel Growth Playbook", formatProjectBrief(
+                    "Susun proposal growth 90 hari lintas channel akuisisi.",
+                    "Proyeksi CAC, LTV & payback period",
+                    "Simulasi realokasi budget kuartal",
+                    "Eksperimen retensi & CRM lifecycle",
+                    "Link Notion / Google Docs / Slide.")),
+            Map.entry("Library CLI & Concurrency Engine", formatProjectBrief(
+                    "Bangun CLI Java 21 dengan pemrosesan paralel aman.",
+                    "Clean architecture & Record DTO",
+                    "Thread-safe via ExecutorService",
+                    "Unit test JUnit 5 lolos semua",
+                    "Repo GitHub publik + README lengkap.")),
+            Map.entry("Spring Boot REST & PostgreSQL API", formatProjectBrief(
+                    "Bangun REST API Spring Boot 3 terhubung PostgreSQL.",
+                    "Layer Controller-Service-Repo + DTO",
+                    "Query bebas N+1 & @Transactional",
+                    "Integration test endpoint lulus",
+                    "Repo GitHub + koleksi Postman/Swagger.")),
+            Map.entry("Resilient Microservice Docker Stack", formatProjectBrief(
+                    "Containerize layanan Spring Boot tahan beban & aman.",
+                    "Multi-stage Dockerfile + compose",
+                    "Mitigasi IDOR & API rate limiter",
+                    "Idempotency key & health endpoint",
+                    "Repo GitHub publik + Docker Compose.")),
+            Map.entry("Customer Churn Prediction Pipeline", formatProjectBrief(
+                    "Bangun pipeline ML prediksi churn bebas data leakage.",
+                    "Split data sebelum preprocessing",
+                    "Evaluasi F1, Precision-Recall & AUC",
+                    "Tuning model & feature importance",
+                    "Repo GitHub / Colab notebook publik.")),
+            Map.entry("PyTorch Image Classifier Service", formatProjectBrief(
+                    "Latih model PyTorch fine-tuned & sajikan via API.",
+                    "Training loop valid + dropout/AdamW",
+                    "Plot loss train vs val konvergen",
+                    "Endpoint inferensi FastAPI/Flask",
+                    "Repo GitHub + link demo API/Colab.")),
+            Map.entry("Production RAG Q&A Assistant", formatProjectBrief(
+                    "Bangun asisten RAG akurat bersitasi sumber.",
+                    "Hybrid search (BM25 + dense vector)",
+                    "Sitasi sumber & guardrail halusinasi",
+                    "Skor faithfulness >= 90% terukur",
+                    "Repo GitHub + URL demo / arsitektur.")),
+            Map.entry("Accessible Design Token UI Kit", formatProjectBrief(
+                    "Bangun UI kit Tailwind responsif aksesibel WCAG AA.",
+                    "Design tokens konsisten & grid rapi",
+                    "Navigasi keyboard & atribut ARIA",
+                    "Escaping DOM aman dari celah XSS",
+                    "Repo GitHub + link demo Vercel/Netlify.")),
+            Map.entry("Offline-First PWA Task Workspace", formatProjectBrief(
+                    "Bangun aplikasi PWA installable dengan mode offline.",
+                    "Manifest & Service Worker caching",
+                    "Cache offline IndexedDB + sync REST",
+                    "Error handling status HTTP rapi",
+                    "Repo GitHub + URL HTTPS deployment.")),
+            Map.entry("Core Web Vitals Optimized App", formatProjectBrief(
+                    "Optimalkan web app hingga lulus Core Web Vitals.",
+                    "Skor Lighthouse Performance >= 95",
+                    "Optimasi LCP, CLS=0 & INP < 200ms",
+                    "Code splitting & checklist PWA lolos",
+                    "Repo GitHub + link demo & laporan audit.")),
+            Map.entry("E-Commerce Revenue SQL Workbook", formatProjectBrief(
+                    "Susun workbook SQL analitik metrik bisnis e-commerce.",
+                    "Query CTE & window function lengkap",
+                    "Analisis cohort retensi & metrik AOV",
+                    "Pembersihan null & duplikasi data",
+                    "Repo GitHub (.sql + ringkasan).")),
+            Map.entry("Cohort Retention Executive Deck", formatProjectBrief(
+                    "Olah data Pandas menjadi dashboard & deck eksekutif.",
+                    "Notebook EDA bersih bebas duplikasi",
+                    "Visualisasi KPI netral tanpa bias",
+                    "Deck 5 slide insight & rekomendasi",
+                    "Repo GitHub + link Slides/BI Deck.")),
+            Map.entry("Automated KPI Anomaly Monitor", formatProjectBrief(
+                    "Bangun skrip validasi A/B test & deteksi anomali KPI.",
+                    "Uji hipotesis p-value & sample power",
+                    "Pisahkan efek musiman & funnel drop",
+                    "Laporan mingguan otomatis + alert",
+                    "Repo GitHub / Notebook analisis.")));
 
     private static List<RoleBundle> masterCatalog() {
         return List.of(

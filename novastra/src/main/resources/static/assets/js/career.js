@@ -13,9 +13,12 @@
     testError: '',
     submittingTest: false,
     careerDirty: false,
-    auditOpen: false,
-    auditPhase: 'input', // input | scanning | result
-    auditText: ''
+    activeProjectId: null,
+    projectUrl: '',
+    projectError: '',
+    submittingProject: false,
+    toast: '',
+    toastTimer: null
   };
 
   function buildRadarSvg(axes) {
@@ -183,14 +186,33 @@
 
           ${projects.length ? `
             <section class="p-6 rounded-3xl bg-white border border-[#E8E2DA] space-y-3">
-              <h2 class="text-lg font-black text-[#2C2A27]">Target Portfolio Projects</h2>
+              <div class="flex items-center justify-between gap-2">
+                <div>
+                  <h2 class="text-lg font-black text-[#2C2A27]">Target Portfolio Projects</h2>
+                  <p class="text-xs text-[#6B6560]">Klik proyek untuk membaca instruksi lengkap &amp; mengumpulkan tautan karya</p>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#E8E2DA] text-[11px] font-extrabold text-[#6B6560]">${projects.length} Proyek</span>
+              </div>
               <div class="space-y-2.5">
-                ${projects.map((p) => `
-                  <div class="p-3.5 rounded-2xl bg-[#FAF8F5] border border-[#E8E2DA]">
-                    <p class="text-xs font-extrabold text-[#2C2A27]">${esc(p.title)}</p>
-                    <p class="text-[11px] text-[#6B6560] mt-1">${esc(p.expectedOutput)}</p>
-                  </div>
-                `).join('')}
+                ${projects.map((p) => {
+                  const meta = getProjectStatusMeta(p);
+                  return `
+                    <button type="button" data-open-project="${esc(p.projectId)}" class="w-full text-left p-4 rounded-2xl bg-[#FAF8F5] border border-[#E8E2DA] hover:border-[#D97757] hover:shadow-sm transition-all flex flex-col gap-2 cursor-pointer group">
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FDF0EB] text-[#D97757] max-w-full truncate">${esc(p.courseTitle || p.courseId)}</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
+                      </div>
+                      <div>
+                        <p class="text-sm font-extrabold text-[#2C2A27] group-hover:text-[#D97757]">${esc(p.title)}</p>
+                        <p class="text-[11px] text-[#6B6560] mt-1 line-clamp-2">${esc(getProjectSummaryLine(p.expectedOutput))}</p>
+                      </div>
+                      ${p.externalUrl ? `<p class="text-[11px] font-mono text-[#5E7C6B] truncate">🔗 ${esc(p.externalUrl)}</p>` : ''}
+                      <div class="flex items-center justify-end pt-1">
+                        <span class="text-xs font-extrabold text-[#D97757]">${esc(meta.cta)}</span>
+                      </div>
+                    </button>
+                  `;
+                }).join('')}
               </div>
             </section>
           ` : ''}
@@ -244,10 +266,16 @@
       </div>
 
       ${state.activeTest ? renderBlindTestModal() : ''}
-      ${state.auditOpen ? renderAuditOverlay(curriculumList) : ''}
+      ${state.activeProjectId && projects.length ? renderProjectModal(projects, canRunAiAudit, auditHint) : ''}
+      ${state.toast ? `
+        <div class="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-[#2C2A27] text-white text-xs font-bold shadow-lg flex items-center gap-2 animate-slide-up">
+          <span class="w-2 h-2 rounded-full bg-[#8A9A86]"></span>
+          <span>${esc(state.toast)}</span>
+        </div>
+      ` : ''}
     `;
 
-    bindEvents(powTests);
+    bindEvents(powTests, projects, canRunAiAudit);
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -294,61 +322,214 @@
     `;
   }
 
-  function renderAuditOverlay(recCourses) {
+  function getProjectStatusMeta(project) {
+    const raw = String(project?.status || 'NOT_SUBMITTED').trim().toUpperCase();
+    const score = Number(project?.score ?? 0);
+    if (raw === 'APPROVED' || raw === 'PASSED' || raw === 'LULUS') {
+      return {
+        label: score > 0 ? `✓ Lulus Audit (${score})` : '✓ Lulus Audit',
+        cls: 'bg-[#8A9A86] text-white',
+        cta: 'Lihat Detail & Hasil →'
+      };
+    }
+    if (raw === 'SUBMITTED' || raw === 'PENDING') {
+      return {
+        label: 'Submitted · Sudah Dikumpulkan',
+        cls: 'bg-[#F0F3EF] text-[#5E7C6B] border border-[#8A9A86]/50',
+        cta: 'Lihat Detail & Perbarui →'
+      };
+    }
+    return {
+      label: 'Belum Dikumpulkan',
+      cls: 'bg-[#F5F0EA] text-[#6B6560]',
+      cta: 'Lihat Detail & Kumpulkan →'
+    };
+  }
+
+  function getProjectSummaryLine(text) {
+    const first = String(text || '').split('\n').map((l) => l.trim()).find(Boolean) || '';
+    return first.replace(/^Tujuan Proyek:\s*/i, '');
+  }
+
+  function formatExpectedOutput(text) {
+    const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) {
+      return '<p class="text-xs text-[#6B6560]">Belum ada rincian instruksi proyek.</p>';
+    }
+    const labelPrefixes = ['Tujuan Proyek:', 'Kriteria Wajib:', 'Format Pengumpulan:'];
+    let html = '';
+    let inList = false;
+    const closeList = () => {
+      if (inList) {
+        html += '</ul>';
+        inList = false;
+      }
+    };
+    for (const line of lines) {
+      if (line.startsWith('- ')) {
+        if (!inList) {
+          html += '<ul class="list-disc pl-5 space-y-1 text-xs text-[#2C2A27]">';
+          inList = true;
+        }
+        html += `<li>${esc(line.slice(2).trim())}</li>`;
+        continue;
+      }
+      closeList();
+      const matched = labelPrefixes.find((p) => line.startsWith(p));
+      if (matched) {
+        const rest = line.slice(matched.length).trim();
+        html += `<p class="text-xs text-[#2C2A27] leading-relaxed"><span class="font-extrabold text-[#2C2A27]">${esc(matched)}</span>${rest ? ` ${esc(rest)}` : ''}</p>`;
+      } else {
+        html += `<p class="text-xs text-[#2C2A27] leading-relaxed">${esc(line)}</p>`;
+      }
+    }
+    closeList();
+    return html;
+  }
+
+  function showToast(msg) {
+    state.toast = msg;
+    if (state.toastTimer) clearTimeout(state.toastTimer);
+    render();
+    state.toastTimer = setTimeout(() => {
+      state.toast = '';
+      render();
+    }, 4000);
+  }
+
+  function openProjectModal(projectId, projects) {
+    if (!projects.length) return;
+    const target = projectId
+      ? (projects.find((p) => p.projectId === projectId) || projects[0])
+      : (projects.find((p) => String(p.status || 'NOT_SUBMITTED').toUpperCase() === 'NOT_SUBMITTED') || projects[0]);
+    state.activeProjectId = target.projectId;
+    state.projectUrl = target.externalUrl || '';
+    state.projectError = '';
+    render();
+  }
+
+  function renderProjectModal(projects, canRunAiAudit, auditHint) {
+    const proj = projects.find((p) => p.projectId === state.activeProjectId) || projects[0];
+    if (!proj) return '';
+    const meta = getProjectStatusMeta(proj);
+
     return `
-      <div class="fixed inset-0 z-50 bg-[#2C2A27]/55 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-        <div class="w-full max-w-2xl bg-[#FDFBF7] border border-[#E8E2DA] rounded-3xl p-6 md:p-8 shadow-2xl animate-slide-up space-y-5">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2.5">
-              <div class="w-9 h-9 rounded-xl bg-[#FDF0EB] text-[#D97757] flex items-center justify-center"><i data-lucide="scan-line" class="w-5 h-5"></i></div>
-              <div>
-                <h2 class="text-lg font-black text-[#2C2A27]">AI Portfolio &amp; Skill Audit</h2>
-                <p class="text-xs text-[#6B6560]">Analisis bukti karya nyata terhadap standar industri</p>
+      <div id="pj-backdrop" class="fixed inset-0 z-50 bg-[#2C2A27]/55 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-2xl bg-[#FDFBF7] border border-[#E8E2DA] rounded-3xl p-6 md:p-7 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto space-y-5">
+          <div class="flex items-start justify-between gap-3 pb-4 border-b border-[#E8E2DA]">
+            <div class="space-y-2 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#FDF0EB] text-[#D97757]">${esc(proj.courseTitle || proj.courseId)}</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
               </div>
+              <h2 class="text-xl font-black text-[#2C2A27]">${esc(proj.title)}</h2>
             </div>
-            <button type="button" id="au-close" class="p-1.5 rounded-lg text-[#6B6560] hover:bg-[#F5F0EA] cursor-pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <button type="button" id="pj-close" aria-label="Tutup" class="p-1.5 rounded-lg text-[#6B6560] hover:bg-[#F5F0EA] cursor-pointer shrink-0"><i data-lucide="x" class="w-5 h-5"></i></button>
           </div>
 
-          ${state.auditPhase === 'input' ? `
-            <div class="space-y-4">
-              <textarea id="au-text" rows="5" class="w-full p-4 rounded-2xl bg-white border border-[#E8E2DA] text-xs font-mono focus:outline-none focus:border-[#D97757]" placeholder="Tempel ringkasan proyek, README, atau tautan repositori...">${esc(state.auditText)}</textarea>
-              <label class="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed border-[#E8E2DA] bg-[#FAF8F5] text-xs font-bold text-[#6B6560] hover:border-[#D97757] cursor-pointer">
-                <i data-lucide="upload" class="w-4 h-4 text-[#D97757]"></i>
-                <span>Atau pilih file sampel (.md / .txt / .java)</span>
-                <input id="au-file" type="file" accept=".md,.txt,.java,.js" class="hidden" />
-              </label>
-              <button type="button" id="au-scan" class="w-full py-3 rounded-2xl bg-[#D97757] text-white text-sm font-extrabold cursor-pointer">Mulai AI Scan</button>
-            </div>
-          ` : state.auditPhase === 'scanning' ? `
-            <div class="relative overflow-hidden p-8 rounded-2xl bg-white border border-[#E8E2DA] text-center space-y-3">
-              <div class="absolute inset-x-0 h-16 bg-gradient-to-b from-transparent via-[#D97757]/25 to-transparent animate-scan-cycle pointer-events-none"></div>
-              <p class="text-sm font-black text-[#2C2A27]">Memindai Bukti Teknis...</p>
-              <p class="text-xs text-[#6B6560]">Mengevaluasi kejelasan metrik dampak, arsitektur, dan kelengkapan bukti.</p>
-            </div>
-          ` : `
-            <div class="space-y-4">
-              <div class="p-5 rounded-2xl bg-white border border-[#E8E2DA] flex items-center justify-between">
-                <div>
-                  <p class="text-xs font-extrabold uppercase text-[#8A9A86]">Persuasion Score</p>
-                  <p class="text-3xl font-black text-[#D97757]">89 / 100</p>
-                </div>
-                <span class="px-3 py-1 rounded-full bg-[#F0F3EF] text-[#5E7C6B] text-xs font-extrabold">Siap Recruiter Review</span>
-              </div>
-              <div class="space-y-2">
-                <p class="text-xs font-extrabold text-[#2C2A27]">Rekomendasi Kursus Lanjutan:</p>
-                ${recCourses.slice(0, 2).map((c) => `
-                  <a href="/course-detail.html?courseId=${encodeURIComponent(c.courseId)}" class="flex items-center justify-between p-3 rounded-xl bg-white border border-[#E8E2DA] hover:border-[#D97757] text-xs font-bold text-[#2C2A27]">
-                    <span>${esc(c.title)}</span>
-                    <span class="text-[#D97757]">Buka →</span>
-                  </a>
+          ${projects.length > 1 ? `
+            <div class="space-y-1.5">
+              <label for="pj-select" class="block text-[11px] font-extrabold uppercase tracking-wider text-[#A89F98]">Pilih Proyek Portofolio Jalur Karier</label>
+              <select id="pj-select" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E8E2DA] text-xs font-bold text-[#2C2A27] focus:outline-none focus:border-[#D97757]">
+                ${projects.map((p) => `
+                  <option value="${esc(p.projectId)}" ${p.projectId === proj.projectId ? 'selected' : ''}>${esc(p.title)} (${esc(getProjectStatusMeta(p).label)})</option>
                 `).join('')}
-              </div>
-              <button type="button" id="au-retry" class="w-full py-2.5 rounded-xl border border-[#E8E2DA] bg-white text-xs font-extrabold text-[#2C2A27] cursor-pointer">Audit Sampel Lain</button>
+              </select>
             </div>
-          `}
+          ` : ''}
+
+          <div class="p-4 rounded-2xl bg-white border border-[#E8E2DA] space-y-2.5">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-[#8A9A86]">Instruksi &amp; Ekspektasi Hasil</p>
+            ${formatExpectedOutput(proj.expectedOutput)}
+          </div>
+
+          ${proj.feedbackNotes ? `
+            <div class="p-3.5 rounded-2xl bg-[#F0F3EF] border border-[#8A9A86]/40 text-xs text-[#2C2A27] space-y-1">
+              <p class="font-extrabold text-[#5E7C6B]">Catatan Status Audit${Number(proj.score ?? 0) > 0 ? ` · Skor ${esc(proj.score)}` : ''}</p>
+              <p class="text-[11px]">${esc(proj.feedbackNotes)}</p>
+            </div>
+          ` : ''}
+
+          ${!canRunAiAudit ? `
+            <div class="p-3.5 rounded-2xl bg-[#FDF0EB] border border-[#F2A68D] text-xs font-bold text-[#A64B2A]">
+              ${esc(auditHint)}
+            </div>
+          ` : ''}
+
+          <form id="pj-form" class="space-y-3 pt-1">
+            <div class="space-y-1.5">
+              <label for="pj-url" class="block text-xs font-extrabold text-[#2C2A27]">Tautan Hasil Proyek (URL Publik)</label>
+              <input id="pj-url" type="url" value="${esc(state.projectUrl)}" placeholder="https://github.com/username/project-repo atau https://figma.com/..." ${!canRunAiAudit || state.submittingProject ? 'disabled' : ''} class="w-full px-4 py-3 rounded-xl bg-white border border-[#E8E2DA] text-xs font-medium focus:outline-none focus:border-[#D97757] disabled:bg-[#F5F0EA] disabled:text-[#9A948D]" />
+              <p class="text-[11px] text-[#6B6560]">Pastikan link repositori GitHub, demo Vercel/Netlify, Google Docs, atau Figma dapat diakses publik.</p>
+            </div>
+
+            ${state.projectError ? `<div class="p-3 rounded-xl bg-[#FDF0EB] border border-[#F2A68D] text-xs font-bold text-[#A64B2A]">${esc(state.projectError)}</div>` : ''}
+
+            <div class="flex items-center justify-end gap-2.5 pt-2">
+              <button type="button" id="pj-cancel" class="px-4 py-2.5 rounded-xl border border-[#E8E2DA] bg-white text-xs font-extrabold text-[#6B6560] hover:text-[#2C2A27] cursor-pointer">Tutup</button>
+              <button type="submit" id="pj-submit" ${!canRunAiAudit || state.submittingProject ? 'disabled' : ''} class="px-5 py-2.5 rounded-xl text-xs font-extrabold transition-colors ${canRunAiAudit ? 'bg-[#D97757] hover:opacity-95 text-white cursor-pointer' : 'bg-[#E8E2DA] text-[#9A948D] cursor-not-allowed'} disabled:opacity-60">
+                ${state.submittingProject ? 'Mengirim ke AI Audit...' : 'Submit & Jalankan AI Audit →'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     `;
+  }
+
+  async function submitPortfolioProject() {
+    if (state.submittingProject || !state.activeProjectId) return;
+    const url = String(state.projectUrl || '').trim();
+    if (!url) {
+      state.projectError = 'Tautan proyek (URL) wajib diisi sebelum dikirim.';
+      render();
+      return;
+    }
+    if (!/^https?:\/\/.+/i.test(url) || url.length > 255) {
+      state.projectError = 'Gunakan format URL valid diawali http:// atau https:// (maksimal 255 karakter).';
+      render();
+      return;
+    }
+
+    const session = window.getSession?.();
+    if (!session?.userId || session.isGuest) return;
+
+    state.submittingProject = true;
+    state.projectError = '';
+    render();
+
+    try {
+      const res = await fetch('/api/portfolio/submit', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: session.userId,
+          projectId: state.activeProjectId,
+          externalUrl: url
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+
+      state.activeProjectId = null;
+      state.projectUrl = '';
+      state.projectError = '';
+
+      const freshRes = await fetch(`/api/career/${encodeURIComponent(session.userId)}`, {
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (freshRes.ok) {
+        state.career = await freshRes.json();
+      }
+      showToast('Proyek berhasil dikumpulkan! Status diperbarui menjadi Submitted.');
+    } catch (err) {
+      state.projectError = `Gagal mengumpulkan proyek: ${err.message}`;
+      render();
+    } finally {
+      state.submittingProject = false;
+    }
   }
 
   async function openCurriculumCourse(courseId, isEnrolled) {
@@ -452,7 +633,7 @@
     render();
   }
 
-  function bindEvents(powTests) {
+  function bindEvents(powTests, projects, canRunAiAudit) {
     document.querySelectorAll('[data-curriculum-course]').forEach((btn) => {
       btn.addEventListener('click', () => {
         openCurriculumCourse(btn.dataset.curriculumCourse, btn.dataset.enrolled === 'true');
@@ -480,37 +661,37 @@
     document.getElementById('bt-submit')?.addEventListener('click', submitBlindTest);
 
     const openAudit = () => {
-      if (!Boolean(state.career?.canRunAiAudit)) return;
-      state.auditOpen = true;
-      state.auditPhase = 'input';
-      render();
+      if (!canRunAiAudit || !projects.length) return;
+      openProjectModal(null, projects);
     };
     document.getElementById('cr-open-audit')?.addEventListener('click', openAudit);
     document.getElementById('cr-open-audit-card')?.addEventListener('click', openAudit);
-    document.getElementById('au-close')?.addEventListener('click', () => { state.auditOpen = false; render(); });
-    document.getElementById('au-file')?.addEventListener('change', (e) => {
-      const f = e.target.files?.[0];
-      if (!f) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        state.auditText = String(reader.result || '').slice(0, 1200);
-        render();
-      };
-      reader.readAsText(f);
+
+    document.querySelectorAll('[data-open-project]').forEach((btn) => {
+      btn.addEventListener('click', () => openProjectModal(btn.dataset.openProject, projects));
     });
-    document.getElementById('au-scan')?.addEventListener('click', () => {
-      const val = document.getElementById('au-text')?.value;
-      if (val !== undefined) state.auditText = val;
-      state.auditPhase = 'scanning';
+
+    const closeProjectModal = () => {
+      if (state.submittingProject) return;
+      state.activeProjectId = null;
+      state.projectError = '';
       render();
-      setTimeout(() => {
-        if (state.auditOpen && state.auditPhase === 'scanning') {
-          state.auditPhase = 'result';
-          render();
-        }
-      }, 1500);
+    };
+    document.getElementById('pj-close')?.addEventListener('click', closeProjectModal);
+    document.getElementById('pj-cancel')?.addEventListener('click', closeProjectModal);
+    document.getElementById('pj-backdrop')?.addEventListener('click', (e) => {
+      if (e.target.id === 'pj-backdrop') closeProjectModal();
     });
-    document.getElementById('au-retry')?.addEventListener('click', () => { state.auditPhase = 'input'; render(); });
+    document.getElementById('pj-select')?.addEventListener('change', (e) => {
+      openProjectModal(e.target.value, projects);
+    });
+    document.getElementById('pj-url')?.addEventListener('input', (e) => {
+      state.projectUrl = e.target.value;
+    });
+    document.getElementById('pj-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      submitPortfolioProject();
+    });
   }
 
   async function loadCareerData() {
@@ -540,7 +721,6 @@
         return;
       }
       state.career = data;
-      state.auditText = state.auditText || `Portfolio project untuk jalur ${data.roleName}`;
       state.loading = false;
     } catch (err) {
       state.loading = false;

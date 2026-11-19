@@ -8,6 +8,7 @@ import com.jarvis.novastra.entity.Enrollment;
 import com.jarvis.novastra.entity.MicroTask;
 import com.jarvis.novastra.entity.MicroTaskResult;
 import com.jarvis.novastra.entity.PortfolioProject;
+import com.jarvis.novastra.entity.PortfolioSubmission;
 import com.jarvis.novastra.entity.Skill;
 import com.jarvis.novastra.entity.User;
 import com.jarvis.novastra.entity.UserSkillGap;
@@ -19,18 +20,22 @@ import com.jarvis.novastra.repository.EnrollmentRepository;
 import com.jarvis.novastra.repository.MicroTaskRepository;
 import com.jarvis.novastra.repository.MicroTaskResultRepository;
 import com.jarvis.novastra.repository.PortfolioProjectRepository;
+import com.jarvis.novastra.repository.PortfolioSubmissionRepository;
 import com.jarvis.novastra.repository.SkillRepository;
 import com.jarvis.novastra.repository.UserRepository;
 import com.jarvis.novastra.repository.UserSkillGapRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CareerService {
@@ -46,6 +51,7 @@ public class CareerService {
     private final MicroTaskRepository microTaskRepository;
     private final MicroTaskResultRepository microTaskResultRepository;
     private final PortfolioProjectRepository portfolioProjectRepository;
+    private final PortfolioSubmissionRepository portfolioSubmissionRepository;
     private final CareerSkillCalculationRepository careerSkillCalculationRepository;
     private final SkillRepository skillRepository;
     private final UserSkillGapRepository userSkillGapRepository;
@@ -59,6 +65,7 @@ public class CareerService {
             MicroTaskRepository microTaskRepository,
             MicroTaskResultRepository microTaskResultRepository,
             PortfolioProjectRepository portfolioProjectRepository,
+            PortfolioSubmissionRepository portfolioSubmissionRepository,
             CareerSkillCalculationRepository careerSkillCalculationRepository,
             SkillRepository skillRepository,
             UserSkillGapRepository userSkillGapRepository) {
@@ -70,6 +77,7 @@ public class CareerService {
         this.microTaskRepository = microTaskRepository;
         this.microTaskResultRepository = microTaskResultRepository;
         this.portfolioProjectRepository = portfolioProjectRepository;
+        this.portfolioSubmissionRepository = portfolioSubmissionRepository;
         this.careerSkillCalculationRepository = careerSkillCalculationRepository;
         this.skillRepository = skillRepository;
         this.userSkillGapRepository = userSkillGapRepository;
@@ -176,6 +184,8 @@ public class CareerService {
                 .allMatch(b -> Boolean.TRUE.equals(b.get("isPassed")));
         boolean canRunAiAudit = isCurriculumCompleted && isAllPowPassed;
 
+        List<Map<String, Object>> portfolioProjects = buildPortfolioProjects(uid, roleCourses, projects);
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("userId", uid);
         payload.put("isOnboarded", true);
@@ -191,7 +201,7 @@ public class CareerService {
         payload.put("blindTests", blindTests);
         payload.put("roadmap", roadmap);
         payload.put("roadmapPhases", roadmap);
-        payload.put("portfolioProjects", projects);
+        payload.put("portfolioProjects", portfolioProjects);
         payload.put("isCurriculumCompleted", isCurriculumCompleted);
         payload.put("isAllPowPassed", isAllPowPassed);
         payload.put("canRunAiAudit", canRunAiAudit);
@@ -201,6 +211,120 @@ public class CareerService {
     /** Memeriksa apakah user memenuhi prasyarat AI Audit (kurikulum 100% dan seluruh PoW Blind Test lulus). */
     public boolean canUserRunAudit(String userId) {
         return Boolean.TRUE.equals(getCareerRoadmap(userId).get("canRunAiAudit"));
+    }
+
+    @Transactional
+    public Map<String, Object> submitPortfolioProject(String userId, String projectId, String externalUrl) {
+        if (userId == null || userId.isBlank() || projectId == null || projectId.isBlank()) {
+            throw new IllegalArgumentException("userId dan projectId wajib diisi.");
+        }
+        String trimmedUrl = externalUrl != null ? externalUrl.trim() : "";
+        if (trimmedUrl.isEmpty()) {
+            throw new IllegalArgumentException("Tautan proyek (URL) wajib diisi.");
+        }
+        String lowerUrl = trimmedUrl.toLowerCase(Locale.ROOT);
+        if ((!lowerUrl.startsWith("http://") && !lowerUrl.startsWith("https://")) || trimmedUrl.length() > 255) {
+            throw new IllegalArgumentException("Format URL harus diawali http:// atau https:// dan maksimal 255 karakter.");
+        }
+
+        String uid = userId.trim();
+        String pid = projectId.trim();
+        if (!userRepository.existsById(uid)) {
+            throw new NoSuchElementException("User tidak ditemukan.");
+        }
+        PortfolioProject project = portfolioProjectRepository.findById(pid)
+                .orElseThrow(() -> new NoSuchElementException("Proyek portofolio tidak ditemukan."));
+
+        if (!canUserRunAudit(uid)) {
+            throw new IllegalStateException("Selesaikan 100% kurikulum dan seluruh Blind Test PoW sebelum mengumpulkan proyek AI Audit.");
+        }
+
+        PortfolioSubmission submission = portfolioSubmissionRepository
+                .findFirstByUserIdAndProjectIdOrderBySubmissionIdAsc(uid, pid)
+                .orElseGet(() -> {
+                    String latestSbId = portfolioSubmissionRepository
+                            .findTopBySubmissionIdStartingWithOrderBySubmissionIdDesc("SB")
+                            .map(PortfolioSubmission::getSubmissionId)
+                            .orElse(null);
+                    PortfolioSubmission created = new PortfolioSubmission();
+                    created.setSubmissionId(AuthService.nextId("SB", latestSbId));
+                    created.setUserId(uid);
+                    created.setProjectId(pid);
+                    return created;
+                });
+
+        submission.setExternalUrl(trimmedUrl);
+        submission.setStatus("SUBMITTED");
+        submission.setScore(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        submission.setFeedbackNotes("Menunggu proses AI Audit...");
+        PortfolioSubmission saved = portfolioSubmissionRepository.save(submission);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("submissionId", saved.getSubmissionId());
+        response.put("userId", saved.getUserId());
+        response.put("projectId", saved.getProjectId());
+        response.put("projectTitle", project.getTitle());
+        response.put("externalUrl", saved.getExternalUrl());
+        response.put("status", saved.getStatus());
+        response.put("score", saved.getScore());
+        response.put("feedbackNotes", saved.getFeedbackNotes());
+        response.put("message", "Proyek berhasil dikumpulkan dan masuk antrean AI Audit.");
+        return response;
+    }
+
+    private List<Map<String, Object>> buildPortfolioProjects(
+            String userId, List<Course> roleCourses, List<PortfolioProject> projects) {
+        if (projects.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Course> courseById = new LinkedHashMap<>();
+        Map<String, Integer> courseOrder = new LinkedHashMap<>();
+        for (int i = 0; i < roleCourses.size(); i++) {
+            Course c = roleCourses.get(i);
+            String cid = c.getCourseId().trim();
+            courseById.put(cid, c);
+            courseOrder.put(cid, i);
+        }
+
+        List<String> projectIds = projects.stream().map(PortfolioProject::getProjectId).toList();
+        Map<String, PortfolioSubmission> submissionByProject = portfolioSubmissionRepository
+                .findByUserIdAndProjectIdIn(userId, projectIds).stream()
+                .collect(Collectors.toMap(
+                        s -> s.getProjectId().trim(),
+                        s -> s,
+                        (a, b) -> a));
+
+        return projects.stream()
+                .sorted(Comparator
+                        .comparingInt((PortfolioProject p) -> courseOrder.getOrDefault(p.getCourseId().trim(), Integer.MAX_VALUE))
+                        .thenComparing(PortfolioProject::getProjectId))
+                .map(p -> {
+                    String cid = p.getCourseId().trim();
+                    String pid = p.getProjectId().trim();
+                    Course course = courseById.get(cid);
+                    PortfolioSubmission sub = submissionByProject.get(pid);
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("projectId", p.getProjectId());
+                    item.put("courseId", p.getCourseId());
+                    item.put("courseTitle", course != null ? course.getTitle() : "");
+                    item.put("title", p.getTitle());
+                    item.put("expectedOutput", p.getExpectedOutput());
+                    if (sub != null) {
+                        item.put("submissionId", sub.getSubmissionId());
+                        item.put("externalUrl", sub.getExternalUrl());
+                        item.put("status", sub.getStatus());
+                        item.put("score", sub.getScore());
+                        item.put("feedbackNotes", sub.getFeedbackNotes() != null ? sub.getFeedbackNotes() : "");
+                    } else {
+                        item.put("submissionId", null);
+                        item.put("externalUrl", "");
+                        item.put("status", "NOT_SUBMITTED");
+                        item.put("score", null);
+                        item.put("feedbackNotes", "");
+                    }
+                    return item;
+                })
+                .toList();
     }
 
     private List<Map<String, Object>> buildSkillGaps(String userId, String roleId, String roleName) {
