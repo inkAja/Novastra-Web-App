@@ -12,8 +12,8 @@
 
   function getFiltered() {
     let list = state.courses.filter((c) => state.field === 'all' || c.field === state.field);
-    if (state.sort === 'popular') list = [...list].sort((a, b) => b.students - a.students);
-    else if (state.sort === 'rating') list = [...list].sort((a, b) => b.rating - a.rating);
+    if (state.sort === 'popular') list = [...list].sort((a, b) => (b.students ?? 0) - (a.students ?? 0));
+    else if (state.sort === 'rating') list = [...list].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     else if (state.sort === 'newest') list = [...list].reverse();
     return list;
   }
@@ -63,20 +63,20 @@
 
       <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         ${slice.map((c) => {
-          const fm = fieldMeta[c.field] || { label: c.field, color: '#D97757', bg: '#FDF0EB' };
+          const fm = fieldMeta[c.field] || { label: c.field || 'Course', color: '#D97757', bg: '#FDF0EB' };
           return `
-            <a href="/course-detail?id=${encodeURIComponent(c.id)}" class="p-5 rounded-2xl bg-white border border-[#E8E2DA] hover:border-[#D97757] transition-all flex flex-col justify-between group">
+            <a href="/course-detail?id=${encodeURIComponent(c.id ?? c.courseId)}" class="p-5 rounded-2xl bg-white border border-[#E8E2DA] hover:border-[#D97757] transition-all flex flex-col justify-between group">
               <div>
                 <div class="flex items-center justify-between gap-2 mb-3">
                   <span class="px-2.5 py-1 rounded-full text-[11px] font-bold" style="background:${fm.bg};color:${fm.color}">${esc(fm.label)}</span>
                   ${c.powVerified ? `<span class="px-2 py-0.5 rounded-full bg-[#F0F3EF] text-[#5E7C6B] text-[10px] font-extrabold">PoW Verified</span>` : ''}
                 </div>
                 <h3 class="text-base font-extrabold text-[#2C2A27] group-hover:text-[#D97757] leading-snug">${esc(c.title)}</h3>
-                <p class="text-xs text-[#6B6560] mt-2 line-clamp-2">${esc(c.desc)}</p>
+                <p class="text-xs text-[#6B6560] mt-2 line-clamp-2">${esc(c.desc || c.instructorName || '')}</p>
               </div>
               <div class="mt-4 pt-3 border-t border-[#E8E2DA] flex items-center justify-between text-xs text-[#6B6560]">
-                <span class="font-bold">${esc(c.level)} · ${esc(c.duration)}</span>
-                <span class="font-extrabold text-[#C4904B]">★ ${c.rating} (${c.students.toLocaleString('id-ID')})</span>
+                <span class="font-bold">${esc(c.level || c.typeCourse || '')} · ${esc(c.duration ?? '')}</span>
+                <span class="font-extrabold text-[#C4904B]">★ ${c.rating ?? 5.0} (${(c.students ?? 0).toLocaleString('id-ID')})</span>
               </div>
             </a>
           `;
@@ -152,6 +152,7 @@
   }
 
   async function init() {
+    if (window.requireAuth && !window.requireAuth({ requireOnboarded: true })) return;
     const params = new URLSearchParams(window.location.search);
     const qField = params.get('field');
     const D = window.NOVASTRA_DATA || {};

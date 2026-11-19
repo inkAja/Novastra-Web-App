@@ -485,6 +485,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    if (window.requireAuth && !window.requireAuth({ requireOnboarded: true })) return;
     const D = window.NOVASTRA_DATA || {};
     const courses = D.COURSES || [];
     const id = new URLSearchParams(window.location.search).get('id');

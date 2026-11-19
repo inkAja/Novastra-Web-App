@@ -377,6 +377,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    if (window.requireAuth && !window.requireAuth({ requireOnboarded: true })) return;
     const tab = new URLSearchParams(window.location.search).get('tab');
     if (tab === 'roleplay') state.mode = 'roleplay';
     render();

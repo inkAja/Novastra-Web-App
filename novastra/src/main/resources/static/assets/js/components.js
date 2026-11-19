@@ -231,17 +231,16 @@
   }
 
   function renderShell(pageKey = 'home', options = {}) {
-    if (window.NovastraStore && !window.NovastraStore.isLoggedIn() && !window.NovastraStore.isGuest?.()) {
-      window.location.replace('/login');
-      return;
-    }
+    const session = window.requireAuth ? window.requireAuth({ requireOnboarded: true }) : window.NovastraAuth?.requireAuth?.({ requireOnboarded: true });
+    if (!session) return;
     injectStyles();
     ['nv-sidebar', 'nv-topbar', 'nv-mobile-header', 'nv-bottom-nav', 'nv-search-modal'].forEach((id) => {
       document.getElementById(id)?.remove();
     });
 
     const activeKey = pageKey === 'course-detail' ? 'courses' : pageKey;
-    const streakCount = window.NovastraStore?.getStreak?.()?.count ?? 12;
+    const streakCount = session.streakCount ?? window.NovastraStore?.getStreak?.()?.count ?? 0;
+    const initials = String(session.fullName || 'NA').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || 'NA';
 
     const sidebarHtml = `
       <aside id="nv-sidebar" class="nv-sidebar p-5 justify-between">
@@ -311,7 +310,7 @@
               ${renderNotificationsMarkup()}
             </div>
           </div>
-          <a href="/profile" class="w-10 h-10 rounded-full bg-[#D97757] text-white font-extrabold text-xs flex items-center justify-center shadow-sm hover:opacity-90 transition-opacity" aria-label="Profil NA">NA</a>
+          <a href="/profile" class="w-10 h-10 rounded-full bg-[#D97757] text-white font-extrabold text-xs flex items-center justify-center shadow-sm hover:opacity-90 transition-opacity" aria-label="Profil">${esc(initials)}</a>
         </div>
       </header>
     `;
@@ -327,7 +326,7 @@
             <i data-lucide="search" class="w-4 h-4 text-[#D97757]"></i>
             <span>Cari</span>
           </button>
-          <a href="/profile" class="w-9 h-9 rounded-full bg-[#D97757] text-white font-extrabold text-xs flex items-center justify-center">NA</a>
+          <a href="/profile" class="w-9 h-9 rounded-full bg-[#D97757] text-white font-extrabold text-xs flex items-center justify-center">${esc(initials)}</a>
         </div>
       </header>
     `;

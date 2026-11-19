@@ -26,6 +26,11 @@ public class PageController {
         return "home";
     }
 
+    @GetMapping("/dashboard")
+    public String dashboard() {
+        return "home";
+    }
+
     @GetMapping("/courses")
     public String courses() {
         return "courses";
@@ -38,6 +43,11 @@ public class PageController {
 
     @GetMapping("/quiz")
     public String quiz() {
+        return "quiz";
+    }
+
+    @GetMapping("/blind-test")
+    public String blindTest() {
         return "quiz";
     }
 

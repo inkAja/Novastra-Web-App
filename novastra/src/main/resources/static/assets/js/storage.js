@@ -2,23 +2,10 @@
   const STORAGE_KEY = 'novastra_state_v1';
 
   const DEFAULT_STATE = {
-    onboarded: false,
-    loggedIn: false,
-    isGuest: false,
-    user: {
-      name: 'Learner Novastra',
-      email: 'learner@novastra.id',
-      targetRole: 'Backend Java Engineer',
-      fields: ['backend', 'ai'],
-      skills: ['Java 21', 'Spring Boot', 'Vanilla JS']
-    },
-    enrolledCourses: ['c-be-1', 'c-ai-1', 'c-fe-1'],
-    completedLessons: {
-      'c-fe-1': ['l-def-1', 'l-def-2', 'l-def-3'],
-      'c-be-1': ['l-be-1', 'l-be-2', 'l-be-3', 'l-be-4']
-    },
+    enrolledCourses: [],
+    completedLessons: {},
     streak: {
-      count: 12,
+      count: 0,
       lastActiveDate: null
     },
     privacy: {
@@ -30,6 +17,7 @@
   };
 
   const todayISO = () => new Date().toISOString().slice(0, 10);
+  const auth = () => window.NovastraAuth;
 
   function readState() {
     try {
@@ -39,10 +27,9 @@
       return {
         ...DEFAULT_STATE,
         ...parsed,
-        user: { ...DEFAULT_STATE.user, ...(parsed.user || {}) },
         streak: { ...DEFAULT_STATE.streak, ...(parsed.streak || {}) },
         privacy: { ...DEFAULT_STATE.privacy, ...(parsed.privacy || {}) },
-        enrolledCourses: Array.isArray(parsed.enrolledCourses) ? parsed.enrolledCourses : [...DEFAULT_STATE.enrolledCourses],
+        enrolledCourses: Array.isArray(parsed.enrolledCourses) ? parsed.enrolledCourses : [],
         completedLessons: parsed.completedLessons && typeof parsed.completedLessons === 'object' ? parsed.completedLessons : {}
       };
     } catch {
@@ -69,7 +56,7 @@
     const url = endpoint.startsWith('/') ? endpoint : `/api/${endpoint}`;
     try {
       const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-      const res = await fetch(url, { ...options, headers });
+      const res = await fetch(url, { credentials: 'include', ...options, headers });
       if (!res.ok) return fallbackData;
       const contentType = res.headers.get('content-type') || '';
       return contentType.includes('application/json') ? await res.json() : fallbackData;
@@ -78,33 +65,43 @@
     }
   }
 
+  function getSessionUser() {
+    const s = auth()?.getSession?.();
+    if (!s) return null;
+    return { ...s, name: s.fullName, targetRole: s.roleName };
+  }
+
   const NovastraStore = {
     getState: readState,
     reset: () => writeState(structuredClone(DEFAULT_STATE)),
 
-    isOnboarded: () => readState().onboarded,
-    completeOnboarding: (prefs = {}) => updateState((s) => {
-      s.onboarded = true;
-      s.user = { ...s.user, ...prefs };
-    }),
+    isOnboarded: () => Boolean(auth()?.getSession?.()?.isOnboarded),
+    completeOnboarding: (prefs = {}) => auth()?.saveSession?.({ ...prefs, isOnboarded: true }),
+    updateProfile: (prefs = {}) => auth()?.saveSession?.(prefs),
 
-    isLoggedIn: () => readState().loggedIn,
-    isGuest: () => Boolean(readState().isGuest),
-    getUser: () => readState().user,
-    login: (userData = {}) => updateState((s) => {
-      s.loggedIn = true;
-      s.isGuest = false;
-      s.user = { ...s.user, ...userData };
-    }),
-    loginAsGuest: () => updateState((s) => {
-      s.loggedIn = true;
-      s.isGuest = true;
-      s.user = { ...s.user, name: 'Guest', role: 'Explorer', targetRole: 'Explorer' };
-    }),
-    logout: () => updateState((s) => {
-      s.loggedIn = false;
-      s.isGuest = false;
-    }),
+    isLoggedIn: () => {
+      const s = auth()?.getSession?.();
+      return Boolean(s && (s.userId || s.isGuest));
+    },
+    isGuest: () => Boolean(auth()?.getSession?.()?.isGuest),
+    getUser: getSessionUser,
+    getUserId: () => auth()?.getSession?.()?.userId ?? null,
+
+    login: (userData = {}, isOnboarded) => {
+      writeState(structuredClone(DEFAULT_STATE));
+      return auth()?.saveSession?.({
+        ...userData,
+        ...(isOnboarded !== undefined ? { isOnboarded } : {})
+      });
+    },
+    loginAsGuest: () => {
+      writeState(structuredClone(DEFAULT_STATE));
+      return auth()?.loginAsGuest?.();
+    },
+    logout: () => {
+      writeState(structuredClone(DEFAULT_STATE));
+      return auth()?.logout?.();
+    },
 
     getEnrolled: () => readState().enrolledCourses,
     isEnrolled: (courseId) => readState().enrolledCourses.includes(courseId),
@@ -115,7 +112,10 @@
       s.enrolledCourses = s.enrolledCourses.filter((id) => id !== courseId);
     }),
 
-    getStreak: () => readState().streak,
+    getStreak: () => ({
+      ...readState().streak,
+      count: auth()?.getSession?.()?.streakCount ?? readState().streak.count ?? 0
+    }),
     touchStreak: () => updateState((s) => {
       const today = todayISO();
       const last = s.streak.lastActiveDate;

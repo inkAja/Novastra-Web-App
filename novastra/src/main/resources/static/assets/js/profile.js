@@ -21,11 +21,12 @@
   function render() {
     const main = document.getElementById('main-content');
     if (!main) return;
+    const session = window.requireAuth?.({ requireOnboarded: true });
+    if (!session) return;
 
     const D = window.NOVASTRA_DATA || {};
-    const store = window.NovastraStore;
-    const user = store?.getUser?.() || { name: 'Hanif Mishbah', targetRole: 'Backend Java Engineer' };
-    const streak = store?.getStreak?.()?.count ?? 12;
+    const user = { name: session.fullName || 'Learner Novastra', targetRole: session.roleName || 'Belum dipilih' };
+    const streak = session.streakCount ?? 0;
     const certs = D.CERTIFICATES || [];
     const { HM = [], HC = ['#F0ECE4', '#D7DFD4', '#B7C5B3', '#8A9A86', '#5F715B'] } = D.HEATMAP_DATA || {};
 
@@ -200,8 +201,8 @@
   function bindEvents(certs) {
     document.getElementById('pr-edit-btn')?.addEventListener('click', () => { state.editOpen = true; render(); });
     document.getElementById('pr-logout-btn')?.addEventListener('click', () => {
-      window.NovastraStore?.logout?.();
-      window.location.replace('/login');
+      window.NovastraStore?.reset?.();
+      window.logout?.();
     });
     document.getElementById('pr-edit-close')?.addEventListener('click', () => { state.editOpen = false; render(); });
     document.getElementById('pr-edit-form')?.addEventListener('submit', (e) => {
@@ -209,7 +210,7 @@
       const name = document.getElementById('pr-name-in')?.value?.trim();
       const targetRole = document.getElementById('pr-role-in')?.value?.trim();
       if (name || targetRole) {
-        window.NovastraStore?.login?.({ ...(name ? { name } : {}), ...(targetRole ? { targetRole } : {}) });
+        window.saveSession?.({ ...(name ? { fullName: name } : {}), ...(targetRole ? { roleName: targetRole } : {}) });
       }
       state.editOpen = false;
       render();
