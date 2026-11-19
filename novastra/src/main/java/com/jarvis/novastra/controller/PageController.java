@@ -16,6 +16,11 @@ public class PageController {
         return "login";
     }
 
+    @GetMapping("/onboarding")
+    public String onboarding() {
+        return "onboarding";
+    }
+
     @GetMapping("/home")
     public String home() {
         return "home";

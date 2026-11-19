@@ -68,6 +68,11 @@
     }
 
     window.NovastraStore?.login?.(userProfile);
+    window.location.href = window.NovastraStore?.isOnboarded?.() ? '/home' : '/onboarding';
+  }
+
+  function handleGuest() {
+    window.NovastraStore?.loginAsGuest?.();
     window.location.href = '/home';
   }
 
@@ -75,8 +80,9 @@
     document.getElementById('tab-login')?.addEventListener('click', () => setMode('login'));
     document.getElementById('tab-register')?.addEventListener('click', () => setMode('register'));
     document.getElementById('auth-form')?.addEventListener('submit', handleSubmit);
+    document.getElementById('auth-guest-btn')?.addEventListener('click', handleGuest);
     if (window.lucide) window.lucide.createIcons();
   });
 
-  window.NovastraAuth = { setMode, validate };
+  window.NovastraAuth = { setMode, validate, handleGuest };
 })();

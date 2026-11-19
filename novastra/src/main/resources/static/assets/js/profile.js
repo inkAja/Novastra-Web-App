@@ -45,6 +45,9 @@
               <button type="button" id="pr-edit-btn" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FAF8F5] border border-[#E8E2DA] hover:border-[#D97757] text-xs font-extrabold text-[#2C2A27] cursor-pointer">
                 <i data-lucide="pencil" class="w-3 h-3 text-[#D97757]"></i> Edit Profile
               </button>
+              <button type="button" id="pr-logout-btn" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#F8ECEB] border border-[#A65D57]/30 hover:bg-[#A65D57] hover:text-white text-xs font-extrabold text-[#A65D57] transition-colors cursor-pointer">
+                <i data-lucide="log-out" class="w-3 h-3"></i> Log Out
+              </button>
             </div>
           </div>
         </div>
@@ -196,6 +199,10 @@
 
   function bindEvents(certs) {
     document.getElementById('pr-edit-btn')?.addEventListener('click', () => { state.editOpen = true; render(); });
+    document.getElementById('pr-logout-btn')?.addEventListener('click', () => {
+      window.NovastraStore?.logout?.();
+      window.location.replace('/login');
+    });
     document.getElementById('pr-edit-close')?.addEventListener('click', () => { state.editOpen = false; render(); });
     document.getElementById('pr-edit-form')?.addEventListener('submit', (e) => {
       e.preventDefault();

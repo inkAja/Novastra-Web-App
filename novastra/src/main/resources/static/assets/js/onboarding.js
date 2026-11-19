@@ -9,50 +9,16 @@
   const TIMES = ['15 min', '30 min', '1 h+'];
 
   const state = {
-    phase: 'loading', // loading | steps | generating
+    phase: 'steps', // steps | generating
     step: 0,
     targetRole: null,
     level: 'Intermediate',
     skills: [],
-    dailyTime: '30 min',
-    progress: 0
+    dailyTime: '30 min'
   };
 
   function root() {
     return document.getElementById('onboarding-root');
-  }
-
-  function renderLoading() {
-    const el = root();
-    if (!el) return;
-    el.innerHTML = `
-      <div class="w-full max-w-md text-center animate-fade-slide-in">
-        <div class="w-16 h-16 mx-auto rounded-2xl bg-[#D97757] text-white flex items-center justify-center font-black text-3xl shadow-md animate-pulse-glow mb-5">N</div>
-        <h1 class="text-2xl font-black tracking-tight text-[#2C2A27]">Novastra</h1>
-        <p class="text-sm text-[#6B6560] mt-1 mb-6">Menyiapkan jalur belajar adaptif Anda...</p>
-        <div class="h-2.5 w-full rounded-full bg-[#E8E2DA] overflow-hidden">
-          <div id="ob-load-bar" class="h-full bg-[#D97757] rounded-full transition-all duration-100" style="width: ${state.progress}%"></div>
-        </div>
-        <div class="mt-4 flex items-center justify-between text-xs text-[#A89F98]">
-          <span>Memuat modul &amp; skill graph</span>
-          <a href="/login" class="font-bold text-[#D97757] hover:underline">Sudah punya akun?</a>
-        </div>
-      </div>
-    `;
-
-    const started = Date.now();
-    const duration = 3000;
-    const timer = setInterval(() => {
-      const pct = Math.min(100, Math.round(((Date.now() - started) / duration) * 100));
-      state.progress = pct;
-      const bar = document.getElementById('ob-load-bar');
-      if (bar) bar.style.width = `${pct}%`;
-      if (pct >= 100) {
-        clearInterval(timer);
-        state.phase = 'steps';
-        renderStep();
-      }
-    }, 60);
   }
 
   function renderGenerating() {
@@ -283,6 +249,14 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', renderLoading);
-  window.NovastraOnboarding = { state, renderLoading, renderStep, renderGenerating };
+  function boot() {
+    if (!window.NovastraStore?.isLoggedIn?.() && !window.NovastraStore?.isGuest?.()) {
+      window.location.replace('/login');
+      return;
+    }
+    renderStep();
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+  window.NovastraOnboarding = { state, boot, renderStep, renderGenerating };
 })();

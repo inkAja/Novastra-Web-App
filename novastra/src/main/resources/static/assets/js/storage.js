@@ -4,6 +4,7 @@
   const DEFAULT_STATE = {
     onboarded: false,
     loggedIn: false,
+    isGuest: false,
     user: {
       name: 'Learner Novastra',
       email: 'learner@novastra.id',
@@ -88,12 +89,22 @@
     }),
 
     isLoggedIn: () => readState().loggedIn,
+    isGuest: () => Boolean(readState().isGuest),
     getUser: () => readState().user,
     login: (userData = {}) => updateState((s) => {
       s.loggedIn = true;
+      s.isGuest = false;
       s.user = { ...s.user, ...userData };
     }),
-    logout: () => updateState((s) => { s.loggedIn = false; }),
+    loginAsGuest: () => updateState((s) => {
+      s.loggedIn = true;
+      s.isGuest = true;
+      s.user = { ...s.user, name: 'Guest', role: 'Explorer', targetRole: 'Explorer' };
+    }),
+    logout: () => updateState((s) => {
+      s.loggedIn = false;
+      s.isGuest = false;
+    }),
 
     getEnrolled: () => readState().enrolledCourses,
     isEnrolled: (courseId) => readState().enrolledCourses.includes(courseId),

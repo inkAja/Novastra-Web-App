@@ -5,14 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Novastra — Personalized EdTech Workspace</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/assets/css/custom.css" />
 </head>
-<body class="min-h-screen bg-[#FDFBF7] text-[#2C2A27]">
-  <div id="onboarding-root" class="min-h-screen flex items-center justify-center p-4 md:p-8"></div>
+<body class="min-h-screen bg-[#FDFBF7] text-[#2C2A27] flex items-center justify-center p-4 md:p-8">
+  <div class="w-full max-w-md text-center animate-fade-slide-in">
+    <div class="w-16 h-16 mx-auto rounded-2xl bg-[#D97757] text-white flex items-center justify-center font-black text-3xl shadow-md animate-pulse-glow mb-5">N</div>
+    <h1 class="text-2xl font-black tracking-tight text-[#2C2A27]">Novastra</h1>
+    <p class="text-sm text-[#6B6560] mt-1 mb-6">Menyiapkan jalur belajar adaptif Anda...</p>
+    <div class="h-2.5 w-full rounded-full bg-[#E8E2DA] overflow-hidden">
+      <div id="splash-load-bar" class="h-full bg-[#D97757] rounded-full transition-all duration-100" style="width: 0%"></div>
+    </div>
+    <div class="mt-4 flex items-center justify-between text-xs text-[#A89F98]">
+      <span>Memuat workspace &amp; skill graph</span>
+      <a href="/login" class="font-bold text-[#D97757] hover:underline">Sudah punya akun?</a>
+    </div>
+  </div>
 
-  <script src="/assets/js/data.js"></script>
-  <script src="/assets/js/storage.js"></script>
-  <script src="/assets/js/onboarding.js"></script>
+  <script>
+    (() => {
+      const started = Date.now();
+      const duration = 2500;
+      const bar = document.getElementById('splash-load-bar');
+      const timer = setInterval(() => {
+        const pct = Math.min(100, Math.round(((Date.now() - started) / duration) * 100));
+        if (bar) bar.style.width = pct + '%';
+        if (pct >= 100) {
+          clearInterval(timer);
+          window.location.replace('/login');
+        }
+      }, 50);
+    })();
+  </script>
 </body>
 </html>

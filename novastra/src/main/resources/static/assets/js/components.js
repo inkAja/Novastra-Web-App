@@ -231,6 +231,10 @@
   }
 
   function renderShell(pageKey = 'home', options = {}) {
+    if (window.NovastraStore && !window.NovastraStore.isLoggedIn() && !window.NovastraStore.isGuest?.()) {
+      window.location.replace('/login');
+      return;
+    }
     injectStyles();
     ['nv-sidebar', 'nv-topbar', 'nv-mobile-header', 'nv-bottom-nav', 'nv-search-modal'].forEach((id) => {
       document.getElementById(id)?.remove();
