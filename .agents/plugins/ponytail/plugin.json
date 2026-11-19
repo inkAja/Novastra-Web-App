@@ -1,0 +1,9 @@
+{
+  "name": "ponytail",
+  "displayName": "Ponytail",
+  "description": "Lazy senior dev ruleset and skills for AI coding agents — YAGNI, standard library first, minimal code.",
+  "version": "5.3.3",
+  "author": "Dietrich Gebert",
+  "homepage": "https://github.com/DietrichGebert/ponytail",
+  "repository": "https://github.com/DietrichGebert/ponytail"
+}

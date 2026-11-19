@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Nunito:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  --terra: #D97757;
+  --apricot: #F2A68D;
+  --sage: #8A9A86;
+  --amber: #C4904B;
+  --bg: #FDFBF7;
+  --canvas: #F5F0EA;
+  --sidebar: #FAF8F5;
+  --surface: #FFFFFF;
+  --border: #E8E2DA;
+  --text-1: #2C2A27;
+  --text-2: #6B6560;
+  --text-3: #A89F98;
+}
+
+body {
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg);
+  color: var(--text-1);
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Hide scrollbars while keeping scroll functionality */
+*, .no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 87, 0.35); }
+  50% { box-shadow: 0 0 18px 6px rgba(217, 119, 87, 0.22); }
+}
+
+@keyframes scan-cycle {
+  0% { transform: translateY(-100%); opacity: 0; }
+  20%, 80% { opacity: 0.75; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes dot-pulse {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.45; }
+  40% { transform: scale(1.15); opacity: 1; }
+}
+
+@keyframes ring-expand {
+  0% { transform: scale(0.85); opacity: 0.75; }
+  100% { transform: scale(1.65); opacity: 0; }
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-pulse-glow { animation: pulse-glow 2.2s ease-in-out infinite; }
+.animate-scan-cycle { animation: scan-cycle 2.4s linear infinite; }
+.animate-dot-pulse { animation: dot-pulse 1.4s ease-in-out infinite; }
+.animate-ring-expand { animation: ring-expand 1.8s cubic-bezier(0.2, 0.8, 0.4, 1) infinite; }
+.animate-fade-slide-in { animation: fadeSlideIn 0.28s ease-out both; }
+.animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
