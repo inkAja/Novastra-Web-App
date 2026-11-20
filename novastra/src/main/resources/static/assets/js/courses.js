@@ -54,8 +54,8 @@
           <button type="button" id="btn-open-bootcamp" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#E8E2DA] hover:border-[#D97757] text-xs font-extrabold text-[#2C2A27] cursor-pointer">
             <i data-lucide="calendar" class="w-4 h-4 text-[#D97757]"></i> Bootcamp Cohort
           </button>
-          <a href="/quiz?tab=roleplay" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D97757] hover:opacity-95 text-xs font-extrabold text-white">
-            <i data-lucide="bot" class="w-4 h-4"></i> AI Roleplay
+          <a href="/quiz" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D97757] hover:opacity-95 text-xs font-extrabold text-white">
+            <i data-lucide="users" class="w-4 h-4"></i> Peer Practice
           </a>
         </div>
       </section>

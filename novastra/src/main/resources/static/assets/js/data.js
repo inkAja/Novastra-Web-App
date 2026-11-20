@@ -52,18 +52,11 @@
     { id: 'bc-4', title: 'Secure Fullstack Engineering Bootcamp', field: 'security', startDate: '5 Jan 2027', duration: '8 Minggu', seatsLeft: 11, mentor: 'Hendra Gunawan', mode: 'Live + Code Audit' }
   ];
 
-  const RP_SCENARIOS = [
-    { id: 'rp-1', title: 'Insiden Latensi API Saat Flash Sale', role: 'Lead Backend Engineer', field: 'backend', difficulty: 'Hard', duration: '15 mnt', context: 'Endpoint checkout Spring Boot melonjak ke p95 4.2s dan connection pool HikariCP habis.' },
-    { id: 'rp-2', title: 'Design Review Pipeline RAG Anti-Halusinasi', role: 'AI Architect', field: 'ai', difficulty: 'Medium', duration: '12 mnt', context: 'Tim produk meminta akurasi kutipan dokumen internal di atas 92% dengan biaya token hemat.' },
-    { id: 'rp-3', title: 'Audit Temuan IDOR Sebelum Rilis Publik', role: 'Security Reviewer', field: 'security', difficulty: 'Hard', duration: '15 mnt', context: 'Endpoint /api/orders/{id} dapat diakses user lain yang hanya mengganti angka ID.' },
-    { id: 'rp-4', title: 'Negosiasi Scope MVP dengan Product Manager', role: 'Senior Tech Lead', field: 'frontend', difficulty: 'Easy', duration: '10 mnt', context: 'PM meminta 5 fitur analitik tambahan dua hari sebelum deadline demo.' }
-  ];
-
   const TOPICS = [
     { id: 'top-1', label: 'System Design & Arsitektur API', field: 'backend', activePeers: 18, icon: 'layers' },
     { id: 'top-2', label: 'Mock Interview Java & Spring Boot', field: 'backend', activePeers: 24, icon: 'terminal' },
     { id: 'top-3', label: 'Pair Debugging Vanilla JS & UI', field: 'frontend', activePeers: 14, icon: 'code' },
-    { id: 'top-4', label: 'Bedah Paper & Prompt Engineering', field: 'ai', activePeers: 16, icon: 'sparkles' },
+    { id: 'top-4', label: 'Bedah Arsitektur & Clean Code', field: 'backend', activePeers: 16, icon: 'git-branch' },
     { id: 'top-5', label: 'SQL Query Optimization & Indexing', field: 'data', activePeers: 11, icon: 'database' },
     { id: 'top-6', label: 'Code Review & Secure Coding', field: 'security', activePeers: 9, icon: 'shield-check' }
   ];
@@ -170,7 +163,6 @@
     TARGET_ROLES,
     SKILL_CHIPS,
     BOOTCAMPS,
-    RP_SCENARIOS,
     TOPICS,
     THREADS,
     CURRICULUM,

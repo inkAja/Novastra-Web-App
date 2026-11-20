@@ -38,6 +38,7 @@ import com.jarvis.novastra.service.EnrollmentService;
 import com.jarvis.novastra.service.MicroTaskService;
 import com.jarvis.novastra.service.OnboardingService;
 import com.jarvis.novastra.service.ProfileService;
+import com.jarvis.novastra.service.StudyPodService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -112,6 +113,9 @@ class NovastraApplicationTests {
 
 	@Autowired
 	private ProfileService profileService;
+
+	@Autowired
+	private StudyPodService studyPodService;
 
 	@Autowired
 	private NovastraDataSeeder dataSeeder;
@@ -653,7 +657,7 @@ class NovastraApplicationTests {
 		StudyPodSession pod = new StudyPodSession();
 		pod.setSessionId("SPS99");
 		pod.setUserId(user.getUserId());
-		pod.setSessionType("AI_ROLEPLAY");
+		pod.setSessionType("PEER_MATCH");
 		pod.setScenarioType("Code Review Readiness Drill");
 		pod.setSentimentScore(BigDecimal.valueOf(88.50));
 		pod.setSessionDate(LocalDate.now());
@@ -733,7 +737,7 @@ class NovastraApplicationTests {
 		StudyPodSession pod = new StudyPodSession();
 		pod.setSessionId("SPS98");
 		pod.setUserId(uid);
-		pod.setSessionType("AI_ROLEPLAY");
+		pod.setSessionType("PEER_MATCH");
 		pod.setScenarioType("Delete Cascade Drill");
 		pod.setSentimentScore(BigDecimal.valueOf(85.00));
 		pod.setSessionDate(LocalDate.now());
@@ -757,6 +761,47 @@ class NovastraApplicationTests {
 		assertTrue(studyPodSessionRepository.findByUserIdAndSessionDateBetween(uid, today.minusDays(1), today.plusDays(1)).isEmpty());
 		assertTrue(enrollmentRepository.findByUserId(uid).isEmpty());
 		assertTrue(userSkillGapRepository.findByUserId(uid).isEmpty());
+	}
+
+	@Test
+	@Transactional
+	@SuppressWarnings("unchecked")
+	void studyPodCreatesPeerMatchSessionAndFeedsProfileHeatmap() {
+		User user = authService.register("Peer Practice Verifier", "studypod.rol03@novastra.id", "secret123");
+		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
+		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+		onboardingService.saveOnboarding(
+				user.getUserId(), role.getRoleId(), 30, 1, List.of(roleSkills.get(0).getSkillId()));
+		String uid = user.getUserId();
+
+		// 1. AI_ROLEPLAY session type must be rejected
+		assertThrows(IllegalArgumentException.class, () ->
+				studyPodService.createPeerSession(uid, "AI_ROLEPLAY", "System Design & Arsitektur API", null));
+
+		// 2. Default session sets PEER_MATCH and sentimentScore = 85.00 and feeds today's heatmap count (1 -> 2)
+		Map<String, Object> first = studyPodService.createPeerSession(
+				uid, null, "Bedah Arsitektur & Clean Code", null);
+		assertEquals("PEER_MATCH", first.get("sessionType"));
+		assertEquals("Bedah Arsitektur & Clean Code", first.get("scenarioType"));
+		assertEquals(0, new BigDecimal("85.00").compareTo((BigDecimal) first.get("sentimentScore")));
+		assertEquals(LocalDate.now().toString(), first.get("sessionDate"));
+
+		List<Map<String, Object>> daysAfterOne = (List<Map<String, Object>>) profileService.getProfile(uid).get("dailyConsistency");
+		Map<String, Object> todayAfterOne = daysAfterOne.get(daysAfterOne.size() - 1);
+		assertEquals(2, todayAfterOne.get("count"));
+		assertEquals(2, todayAfterOne.get("level"));
+
+		// 3. Second consecutive session allocates next distinct SPxxx ID despite seeded SPSxx rows
+		Map<String, Object> second = studyPodService.createPeerSession(
+				uid, "PEER_MATCH", "System Design & Arsitektur API", BigDecimal.valueOf(92.5));
+		assertNotEquals(first.get("sessionId"), second.get("sessionId"));
+		assertEquals("PEER_MATCH", second.get("sessionType"));
+		assertEquals(0, new BigDecimal("92.50").compareTo((BigDecimal) second.get("sentimentScore")));
+
+		List<Map<String, Object>> daysAfterTwo = (List<Map<String, Object>>) profileService.getProfile(uid).get("dailyConsistency");
+		Map<String, Object> todayAfterTwo = daysAfterTwo.get(daysAfterTwo.size() - 1);
+		assertEquals(3, todayAfterTwo.get("count"));
+		assertEquals(3, todayAfterTwo.get("level"));
 	}
 
 }
