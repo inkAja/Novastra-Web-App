@@ -38,6 +38,7 @@ import com.jarvis.novastra.service.EnrollmentService;
 import com.jarvis.novastra.service.MicroTaskService;
 import com.jarvis.novastra.service.OnboardingService;
 import com.jarvis.novastra.service.ProfileService;
+import com.jarvis.novastra.service.StudyPodRoomService;
 import com.jarvis.novastra.service.StudyPodService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -46,7 +47,15 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.WebApplicationContext;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 class NovastraApplicationTests {
@@ -116,6 +125,12 @@ class NovastraApplicationTests {
 
 	@Autowired
 	private StudyPodService studyPodService;
+
+	@Autowired
+	private StudyPodRoomService studyPodRoomService;
+
+	@Autowired
+	private WebApplicationContext webApplicationContext;
 
 	@Autowired
 	private NovastraDataSeeder dataSeeder;
@@ -802,6 +817,194 @@ class NovastraApplicationTests {
 		Map<String, Object> todayAfterTwo = daysAfterTwo.get(daysAfterTwo.size() - 1);
 		assertEquals(3, todayAfterTwo.get("count"));
 		assertEquals(3, todayAfterTwo.get("level"));
+	}
+
+	@Test
+	@Transactional
+	@SuppressWarnings("unchecked")
+	void studyPodRoomSupportsTwoPeersActionsNotesAndSavesOnLeave() {
+		String topic = "System Design & LAN Sync Test";
+		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
+		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+
+		User peer1 = authService.register("Peer Satu", "peer1.lan@novastra.id", "secret123");
+		User peer2 = authService.register("Peer Dua", "peer2.lan@novastra.id", "secret123");
+		User peer3 = authService.register("Peer Tiga", "peer3.lan@novastra.id", "secret123");
+		onboardingService.saveOnboarding(peer1.getUserId(), role.getRoleId(), 30, 1, List.of(roleSkills.get(0).getSkillId()));
+		onboardingService.saveOnboarding(peer2.getUserId(), role.getRoleId(), 30, 1, List.of(roleSkills.get(0).getSkillId()));
+
+		// 1. Peer 1 joins and creates the room
+		Map<String, Object> joined1 = studyPodRoomService.joinRoom(peer1.getUserId(), topic);
+		assertEquals(1, joined1.get("participantCount"));
+		Object roomId = joined1.get("roomId");
+
+		// Rejoining with the same user keeps count at 1
+		Map<String, Object> rejoined1 = studyPodRoomService.joinRoom(peer1.getUserId(), topic);
+		assertEquals(1, rejoined1.get("participantCount"));
+		assertEquals(roomId, rejoined1.get("roomId"));
+
+		// 2. Peer 2 joins the same room
+		Map<String, Object> joined2 = studyPodRoomService.joinRoom(peer2.getUserId(), topic);
+		assertEquals(2, joined2.get("participantCount"));
+		assertEquals(roomId, joined2.get("roomId"));
+
+		// 3. Peer 3 cannot join a full room (max 2)
+		assertThrows(IllegalStateException.class, () -> studyPodRoomService.joinRoom(peer3.getUserId(), topic));
+
+		// 4. Mute, raise hand, and shared note actions update in-memory room state
+		studyPodRoomService.performAction(peer1.getUserId(), topic, "TOGGLE_MUTE", null);
+		studyPodRoomService.performAction(peer1.getUserId(), topic, "TOGGLE_HAND", null);
+		studyPodRoomService.performAction(peer2.getUserId(), topic, "ADD_NOTE", "https://figma.com/file/novastra-demo");
+
+		Map<String, Object> roomState = studyPodRoomService.getRoomState(topic);
+		List<com.jarvis.novastra.model.RoomParticipant> participants =
+				(List<com.jarvis.novastra.model.RoomParticipant>) roomState.get("participants");
+		assertEquals(2, participants.size());
+		assertTrue(participants.get(0).isMuted());
+		assertTrue(participants.get(0).isHandRaised());
+		assertFalse(participants.get(1).isMuted());
+
+		List<com.jarvis.novastra.model.RoomNote> notes =
+				(List<com.jarvis.novastra.model.RoomNote>) roomState.get("notes");
+		assertEquals(1, notes.size());
+		assertEquals("Peer Dua", notes.get(0).getSenderName());
+		assertEquals("https://figma.com/file/novastra-demo", notes.get(0).getContent());
+
+		// 5. HTTP Controller + JSON contract verification (isMuted/isHandRaised/409 Conflict)
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+		try {
+			mockMvc.perform(get("/api/studypod/room/state").param("scenarioType", topic))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.participantCount").value(2))
+					.andExpect(jsonPath("$.participants[0].isMuted").value(true))
+					.andExpect(jsonPath("$.participants[0].isHandRaised").value(true))
+					.andExpect(jsonPath("$.participants[1].isMuted").value(false))
+					.andExpect(jsonPath("$.notes[0].senderName").value("Peer Dua"));
+
+			mockMvc.perform(post("/api/studypod/room/join")
+							.contentType(MediaType.APPLICATION_JSON)
+							.content("{\"userId\":\"" + peer3.getUserId() + "\",\"scenarioType\":\"" + topic + "\"}"))
+					.andExpect(status().isConflict());
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+
+		// 6. Peer 1 leaves -> session saved, Peer 2 remains in active room
+		Map<String, Object> leave1 = studyPodRoomService.leaveRoom(peer1.getUserId(), topic);
+		assertEquals("PEER_MATCH", leave1.get("sessionType"));
+		assertEquals(Boolean.TRUE, leave1.get("roomActive"));
+		assertEquals(1, studyPodRoomService.getRoomState(topic).get("participantCount"));
+
+		// 6. Peer 2 leaves -> session saved and empty room removed
+		Map<String, Object> leave2 = studyPodRoomService.leaveRoom(peer2.getUserId(), topic);
+		assertEquals(Boolean.FALSE, leave2.get("roomActive"));
+		assertNull(studyPodRoomService.getRoomState(topic).get("roomId"));
+		assertEquals(0, studyPodRoomService.getRoomState(topic).get("participantCount"));
+
+		LocalDate today = LocalDate.now();
+		assertEquals(1, studyPodSessionRepository.findByUserIdAndSessionDateBetween(peer1.getUserId(), today, today).size());
+		assertEquals(1, studyPodSessionRepository.findByUserIdAndSessionDateBetween(peer2.getUserId(), today, today).size());
+	}
+
+	@Test
+	@Transactional
+	@SuppressWarnings("unchecked")
+	void studyPodTopicsMatchUserCareerRoleAndIncludeCrossRole() throws Exception {
+		CareerRole fsRole = careerRoleRepository.findByRoleName("Full-Stack Web Developer")
+				.orElseGet(() -> {
+					CareerRole r = new CareerRole();
+					r.setRoleId("TSTFS");
+					r.setRoleName("Full-Stack Web Developer");
+					r.setDescription("Full-Stack Test Role");
+					return careerRoleRepository.save(r);
+				});
+		CareerRole daRole = careerRoleRepository.findByRoleName("Data Analyst")
+				.orElseGet(() -> {
+					CareerRole r = new CareerRole();
+					r.setRoleId("TSTDA");
+					r.setRoleName("Data Analyst");
+					r.setDescription("Data Analyst Test Role");
+					return careerRoleRepository.save(r);
+				});
+		CareerRole uxRole = careerRoleRepository.findByRoleName("Senior UI/UX Designer")
+				.orElseGet(() -> {
+					CareerRole r = new CareerRole();
+					r.setRoleId("TSTUX");
+					r.setRoleName("Senior UI/UX Designer");
+					r.setDescription("UI/UX Test Role");
+					return careerRoleRepository.save(r);
+				});
+		CareerRole mktRole = careerRoleRepository.findByRoleName("Digital Marketing Lead")
+				.orElseGet(() -> {
+					CareerRole r = new CareerRole();
+					r.setRoleId("TSTMK");
+					r.setRoleName("Digital Marketing Lead");
+					r.setDescription("Fallback Test Role");
+					return careerRoleRepository.save(r);
+				});
+
+		User fsUser = authService.register("FS Topics", "fs.topics@novastra.id", "secret123");
+		fsUser.setRoleId(fsRole.getRoleId());
+		fsUser = userRepository.save(fsUser);
+
+		User daUser = authService.register("DA Topics", "da.topics@novastra.id", "secret123");
+		daUser.setRoleId(daRole.getRoleId());
+		daUser = userRepository.save(daUser);
+
+		User uxUser = authService.register("UX Topics", "ux.topics@novastra.id", "secret123");
+		uxUser.setRoleId(uxRole.getRoleId());
+		uxUser = userRepository.save(uxUser);
+
+		User mktUser = authService.register("MKT Topics", "mkt.topics@novastra.id", "secret123");
+		mktUser.setRoleId(mktRole.getRoleId());
+		mktUser = userRepository.save(mktUser);
+
+		Map<String, Object> fsRes = studyPodService.getTopicsForUser(fsUser.getUserId());
+		List<StudyPodService.PracticeTopic> fsTopics = (List<StudyPodService.PracticeTopic>) fsRes.get("topics");
+		assertEquals("Full-Stack Web Developer", fsRes.get("roleName"));
+		assertEquals(5, fsTopics.size());
+		assertEquals("System Design & Arsitektur API", fsTopics.get(0).title());
+		assertEquals("Cross-Role Technical Collaboration", fsTopics.get(4).title());
+
+		Map<String, Object> daRes = studyPodService.getTopicsForUser(daUser.getUserId());
+		List<StudyPodService.PracticeTopic> daTopics = (List<StudyPodService.PracticeTopic>) daRes.get("topics");
+		assertEquals("Data Analyst", daRes.get("roleName"));
+		assertEquals(5, daTopics.size());
+		assertEquals("SQL Exploratory & Window Functions", daTopics.get(0).title());
+		assertEquals("Cross-Role Technical Collaboration", daTopics.get(4).title());
+
+		Map<String, Object> uxRes = studyPodService.getTopicsForUser(uxUser.getUserId());
+		List<StudyPodService.PracticeTopic> uxTopics = (List<StudyPodService.PracticeTopic>) uxRes.get("topics");
+		assertEquals("Senior UI/UX Designer", uxRes.get("roleName"));
+		assertEquals(5, uxTopics.size());
+		assertEquals("Design System & Token Consistency", uxTopics.get(0).title());
+		assertEquals("Cross-Role Technical Collaboration", uxTopics.get(4).title());
+
+		Map<String, Object> mktRes = studyPodService.getTopicsForUser(mktUser.getUserId());
+		List<StudyPodService.PracticeTopic> mktTopics = (List<StudyPodService.PracticeTopic>) mktRes.get("topics");
+		assertEquals("Digital Marketing Lead", mktRes.get("roleName"));
+		assertEquals(5, mktTopics.size());
+		assertEquals("System Design & Arsitektur API", mktTopics.get(0).title());
+		assertEquals("Cross-Role Technical Collaboration", mktTopics.get(4).title());
+
+		for (StudyPodService.PracticeTopic topic : daTopics) {
+			assertFalse(topic.taskA().isBlank());
+			assertFalse(topic.taskB().isBlank());
+			assertFalse(topic.initialRubric().isBlank());
+		}
+
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+		mockMvc.perform(get("/api/studypod/topics/{userId}", daUser.getUserId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.roleName").value("Data Analyst"))
+				.andExpect(jsonPath("$.topics.length()").value(5))
+				.andExpect(jsonPath("$.topics[0].title").value("SQL Exploratory & Window Functions"))
+				.andExpect(jsonPath("$.topics[0].taskA").isNotEmpty())
+				.andExpect(jsonPath("$.topics[0].taskB").isNotEmpty())
+				.andExpect(jsonPath("$.topics[0].initialRubric").isNotEmpty());
+
+		mockMvc.perform(get("/api/studypod/topics/NOUSR"))
+				.andExpect(status().isNotFound());
 	}
 
 }

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&amp;family=Nunito:wght@600;700;800;900&amp;display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/assets/css/practice-room.css?v=2" />
+  <link rel="stylesheet" href="/assets/css/practice-room.css?v=3" />
 </head>
 <body data-page="practice-room" class="pr-page">
   <div class="pr-shell">
@@ -67,18 +67,30 @@
             </div>
           </article>
 
-          <article id="pr-card-peer" class="pr-peer-card pr-peer-card--active">
-            <div class="pr-card-top" aria-hidden="true"></div>
+          <article id="pr-card-peer" class="pr-peer-card pr-peer-card--waiting">
+            <div class="pr-card-top">
+              <span id="pr-peer-hand-badge" class="pr-hand-badge is-hidden">
+                <i data-lucide="hand" class="pr-icon-xs"></i>
+                <span>Hand Raised</span>
+              </span>
+            </div>
 
             <div class="pr-peer-center">
-              <div class="pr-avatar-outer-ring">
+              <div id="pr-peer-outer-ring" class="pr-avatar-outer-ring is-waiting">
                 <div class="pr-avatar-ring pr-avatar-ring--sage">
-                  <span class="pr-avatar-initials pr-avatar-initials--sage">SK</span>
+                  <span id="pr-peer-initials" class="pr-avatar-initials pr-avatar-initials--sage">..</span>
                 </div>
               </div>
-              <h2 class="pr-peer-name">Sarah K.</h2>
-              <p id="pr-peer-role" class="pr-peer-role">Senior Peer / Growth Strategist</p>
-              <div class="pr-speaking-row">
+              <h2 id="pr-peer-name" class="pr-peer-name">Menunggu Peer...</h2>
+              <p id="pr-peer-role" class="pr-peer-role">Menunggu partner di topik yang sama</p>
+              <div id="pr-peer-waiting-pill" class="pr-waiting-pill">
+                <span class="pr-waiting-dot" aria-hidden="true"></span>
+                <span>Menunggu Peer bergabung di jaringan...</span>
+              </div>
+              <div id="pr-peer-muted-pill" class="pr-mute-pill is-muted is-hidden">
+                <span>Muted</span>
+              </div>
+              <div id="pr-peer-speaking-row" class="pr-speaking-row is-hidden">
                 <div id="pr-peer-waveform" class="pr-waveform" aria-hidden="true">
                   <span></span><span></span><span></span><span></span><span></span><span></span>
                 </div>
@@ -87,8 +99,8 @@
             </div>
 
             <div id="pr-peer-caption" class="pr-caption-box pr-caption-box--peer" aria-live="polite">
-              <span class="pr-caption-speaker">Sarah K.:</span>
-              <span id="pr-peer-caption-text" class="pr-caption-text">"Bisa jelaskan bagaimana kamu menangani rate limiting di API gateway?"</span>
+              <span id="pr-peer-caption-speaker" class="pr-caption-speaker">Partner:</span>
+              <span id="pr-peer-caption-text" class="pr-caption-text">"Menunggu partner bergabung ke ruang latihan ini..."</span>
             </div>
           </article>
         </div>
@@ -131,7 +143,7 @@
             <div class="pr-task-card pr-task-card--sage">
               <span class="pr-task-badge pr-task-badge--sage">B</span>
               <p class="pr-task-text">
-                <strong>Peer B (Sarah):</strong>
+                <strong id="pr-task-b-owner">Peer B (Partner):</strong>
                 <span id="pr-task-b-text">Berikan 2 umpan balik konstruktif — 1 kekuatan utama dan 1 area perbaikan teknis.</span>
               </p>
             </div>
@@ -156,6 +168,6 @@
   </div>
 
   <script src="/assets/js/auth.js"></script>
-  <script src="/assets/js/practice-room.js?v=2"></script>
+  <script src="/assets/js/practice-room.js?v=4"></script>
 </body>
 </html>

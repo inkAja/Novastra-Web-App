@@ -166,11 +166,57 @@
   };
 
   const params = new URLSearchParams(window.location.search);
+  const urlTopic = (params.get('topic') || '').trim();
+  const savedTopic = (() => {
+    try { return (window.sessionStorage.getItem('novastra_active_topic') || '').trim(); } catch { return ''; }
+  })();
+  const initialTopic = urlTopic || savedTopic || 'System Design & Arsitektur API';
+  try { window.sessionStorage.setItem('novastra_active_topic', initialTopic); } catch { /* ignore */ }
+
   const durationMin = Math.max(1, Math.min(90, parseInt(params.get('duration'), 10) || 10));
   const totalSeconds = durationMin * 60;
 
+  function loadStoredTopicConfig(topic) {
+    try {
+      const raw = window.sessionStorage.getItem('novastra_active_topic_meta');
+      if (!raw) return null;
+      const meta = JSON.parse(raw);
+      if (meta && String(meta.title || '').trim().toLowerCase() === String(topic || '').trim().toLowerCase()) {
+        return meta;
+      }
+    } catch {
+      // Ignore invalid or restricted storage
+    }
+    return null;
+  }
+
+  function findStaticTopicConfig(topic) {
+    const key = String(topic || '').trim().toLowerCase();
+    const match = Object.entries(TOPIC_TASKS).find(([name]) => name.toLowerCase() === key);
+    return match ? match[1] : null;
+  }
+
+  function resolveTopicConfig(topic, overrideMeta = null) {
+    const base = findStaticTopicConfig(topic) || DEFAULT_TASK;
+    const meta = overrideMeta || loadStoredTopicConfig(topic);
+    if (!meta) return base;
+    return {
+      icon: meta.icon || base.icon,
+      taskA: meta.taskA || base.taskA,
+      taskB: meta.taskB || base.taskB,
+      initialRubric: meta.initialRubric || base.initialNote,
+      captions: base.captions
+    };
+  }
+
+  const initialTopicMeta = loadStoredTopicConfig(initialTopic);
+
   const state = {
-    topic: (params.get('topic') || 'System Design & Arsitektur API').trim(),
+    userId: null,
+    isGuest: false,
+    topic: initialTopic,
+    topicConfig: resolveTopicConfig(initialTopic, initialTopicMeta),
+    hasMatchedMeta: Boolean(initialTopicMeta),
     muted: false,
     handRaised: false,
     totalSeconds,
@@ -178,10 +224,16 @@
     timerId: null,
     captionIndex: 0,
     captionTimerId: null,
+    pollTimerId: null,
+    pollInFlight: false,
+    joined: false,
+    roomFull: false,
     leaving: false,
     userName: 'Learner',
     userRole: 'Peserta Jalur Karier',
-    notes: []
+    partner: null,
+    notes: [],
+    lastServerNotes: []
   };
 
   function getInitials(name) {
@@ -235,20 +287,71 @@
     syncCaptionsUI();
   }
 
+  function syncPartnerUI(partner) {
+    const card = document.getElementById('pr-card-peer');
+    const outerRing = document.getElementById('pr-peer-outer-ring');
+    const initialsEl = document.getElementById('pr-peer-initials');
+    const nameEl = document.getElementById('pr-peer-name');
+    const roleEl = document.getElementById('pr-peer-role');
+    const handBadge = document.getElementById('pr-peer-hand-badge');
+    const waitingPill = document.getElementById('pr-peer-waiting-pill');
+    const mutedPill = document.getElementById('pr-peer-muted-pill');
+    const speakingRow = document.getElementById('pr-peer-speaking-row');
+    const taskBOwner = document.getElementById('pr-task-b-owner');
+    const captionSpeaker = document.getElementById('pr-peer-caption-speaker');
+
+    const hasPartner = Boolean(partner);
+    const isPartnerMuted = Boolean(partner?.isMuted);
+    const isPartnerHand = Boolean(partner?.isHandRaised);
+
+    if (card) {
+      card.classList.toggle('pr-peer-card--active', hasPartner);
+      card.classList.toggle('pr-peer-card--waiting', !hasPartner);
+    }
+    if (outerRing) {
+      outerRing.classList.toggle('is-waiting', !hasPartner);
+      outerRing.classList.toggle('is-muted', hasPartner && isPartnerMuted);
+    }
+    if (initialsEl) initialsEl.textContent = hasPartner ? getInitials(partner.fullName) : '..';
+    if (nameEl) nameEl.textContent = hasPartner ? partner.fullName : 'Menunggu Peer...';
+    if (roleEl) roleEl.textContent = hasPartner ? (partner.roleName || 'Peserta Jalur Karier') : 'Menunggu partner di topik yang sama';
+    if (handBadge) handBadge.classList.toggle('is-hidden', !hasPartner || !isPartnerHand);
+    if (waitingPill) waitingPill.classList.toggle('is-hidden', hasPartner);
+    if (mutedPill) mutedPill.classList.toggle('is-hidden', !hasPartner || !isPartnerMuted);
+    if (speakingRow) speakingRow.classList.toggle('is-hidden', !hasPartner || isPartnerMuted);
+    if (taskBOwner) taskBOwner.textContent = hasPartner ? `Peer B (${getFirstName(partner.fullName)}):` : 'Peer B (Partner):';
+    if (captionSpeaker) captionSpeaker.textContent = hasPartner ? `${getFirstName(partner.fullName)}:` : 'Partner:';
+    syncCaptionsUI();
+  }
+
   function syncCaptionsUI() {
     const cfg = TOPIC_TASKS[state.topic] || DEFAULT_TASK;
     const list = cfg.captions || DEFAULT_TASK.captions;
     const item = list[state.captionIndex % list.length];
     const userBox = document.getElementById('pr-user-caption');
     const userText = document.getElementById('pr-user-caption-text');
+    const peerBox = document.getElementById('pr-peer-caption');
     const peerText = document.getElementById('pr-peer-caption-text');
+
     if (userBox) userBox.classList.toggle('is-dimmed', state.muted);
     if (userText) {
       userText.textContent = state.muted
         ? 'Mikrofon dimatikan — klik Unmute untuk berbicara.'
         : item.user;
     }
-    if (peerText) peerText.textContent = item.peer;
+
+    const partner = state.partner;
+    const peerDimmed = !partner || Boolean(partner.isMuted);
+    if (peerBox) peerBox.classList.toggle('is-dimmed', peerDimmed);
+    if (peerText) {
+      if (!partner) {
+        peerText.textContent = '"Menunggu partner bergabung ke ruang latihan ini..."';
+      } else if (partner.isMuted) {
+        peerText.textContent = '"Partner mematikan mikrofon."';
+      } else {
+        peerText.textContent = item.peer;
+      }
+    }
   }
 
   function startCaptionRotation() {
@@ -259,25 +362,170 @@
     }, 7000);
   }
 
-  function renderNotes() {
+  function buildTopicNotes(serverNotes) {
+    const cfg = state.topicConfig || DEFAULT_TASK;
+    const rubric = cfg.initialRubric || cfg.initialNote || DEFAULT_TASK.initialNote;
+    const list = Array.isArray(serverNotes) ? serverNotes : [];
+    return [
+      { senderName: 'Panduan Topik', timestamp: 'Rubrik', content: rubric },
+      ...list.map((note) => ({
+        senderName: note.senderName || 'Peer',
+        timestamp: note.timestamp || '',
+        content: note.content || ''
+      }))
+    ];
+  }
+
+  function renderNotes(shouldScrollToBottom) {
     const listEl = document.getElementById('pr-notes-list');
     if (!listEl) return;
     listEl.innerHTML = state.notes.map((note) => {
-      const isUrl = /^https?:\/\/\S+$/i.test(note.text);
+      const text = String(note.content || '');
+      const isUrl = /^https?:\/\/\S+$/i.test(text);
       const bodyHtml = isUrl
-        ? `<a href="${esc(note.text)}" target="_blank" rel="noopener noreferrer" class="pr-note-link">${esc(note.text)}</a>`
-        : esc(note.text);
+        ? `<a href="${esc(text)}" target="_blank" rel="noopener noreferrer" class="pr-note-link">${esc(text)}</a>`
+        : esc(text);
       return `
         <article class="pr-note-item">
           <div class="pr-note-meta">
-            <span class="pr-note-author">${esc(note.author)}</span>
-            <span class="pr-note-time">${esc(note.time)}</span>
+            <span class="pr-note-author">${esc(note.senderName)}</span>
+            <span class="pr-note-time">${esc(note.timestamp)}</span>
           </div>
           <p class="pr-note-body">${bodyHtml}</p>
         </article>
       `;
     }).join('');
-    listEl.scrollTop = listEl.scrollHeight;
+    if (shouldScrollToBottom) {
+      listEl.scrollTop = listEl.scrollHeight;
+    }
+  }
+
+  function syncNotesFromServer(serverNotes, forceScroll) {
+    const nextNotes = buildTopicNotes(serverNotes);
+    const sig = (arr) => arr.map((n) => `${n.timestamp}|${n.senderName}|${n.content}`).join('\n');
+    if (sig(state.notes) === sig(nextNotes)) return;
+
+    const listEl = document.getElementById('pr-notes-list');
+    const nearBottom = !listEl || (listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 28);
+    const firstLoad = state.notes.length === 0;
+    state.notes = nextNotes;
+    renderNotes(Boolean(forceScroll || firstLoad || nearBottom));
+  }
+
+  function applyRoomState(roomData, options = {}) {
+    if (!roomData || typeof roomData !== 'object') return;
+    const participants = Array.isArray(roomData.participants) ? roomData.participants : [];
+    const me = participants.find((p) => p.userId === state.userId) || null;
+    if (me) {
+      state.joined = true;
+      state.userName = me.fullName || state.userName;
+      state.userRole = me.roleName || state.userRole;
+      state.muted = Boolean(me.isMuted);
+      state.handRaised = Boolean(me.isHandRaised);
+      syncUserIdentityUI();
+      syncControlsUI();
+    }
+
+    const partner = participants.find((p) => p.userId !== state.userId) || null;
+    state.partner = partner;
+    state.lastServerNotes = Array.isArray(roomData.notes) ? roomData.notes : [];
+    syncPartnerUI(partner);
+    syncNotesFromServer(state.lastServerNotes, options.forceNoteScroll);
+  }
+
+  async function postRoomJson(url, payload) {
+    const res = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data?.message || `HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  async function performRoomAction(actionType, payload = null) {
+    if (!state.userId || state.isGuest) {
+      if (actionType === 'TOGGLE_MUTE') { state.muted = !state.muted; syncControlsUI(); }
+      if (actionType === 'TOGGLE_HAND') { state.handRaised = !state.handRaised; syncControlsUI(); }
+      return null;
+    }
+    if (state.roomFull) return null;
+
+    try {
+      const roomData = await postRoomJson('/api/studypod/room/action', {
+        userId: state.userId,
+        scenarioType: state.topic,
+        actionType,
+        payload
+      });
+      showError('');
+      applyRoomState(roomData, { forceNoteScroll: actionType === 'ADD_NOTE' });
+      return roomData;
+    } catch (err) {
+      showError(`Gagal menyinkronkan aksi ke ruang latihan: ${err.message}`);
+      return null;
+    }
+  }
+
+  async function pollRoomState() {
+    if (state.leaving || state.roomFull || state.pollInFlight) return;
+    state.pollInFlight = true;
+    try {
+      const res = await fetch(`/api/studypod/room/state?scenarioType=${encodeURIComponent(state.topic)}`, {
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (!res.ok) return;
+      const roomData = await res.json().catch(() => null);
+      if (!roomData) return;
+
+      const participants = Array.isArray(roomData.participants) ? roomData.participants : [];
+      if (state.joined && state.userId && !participants.some((p) => p.userId === state.userId)) {
+        const rejoined = await postRoomJson('/api/studypod/room/join', {
+          userId: state.userId,
+          scenarioType: state.topic
+        });
+        applyRoomState(rejoined);
+        return;
+      }
+
+      applyRoomState(roomData);
+    } catch {
+      // Transient LAN hiccup — next 2s poll retries automatically
+    } finally {
+      state.pollInFlight = false;
+    }
+  }
+
+  function startRoomPolling() {
+    if (state.pollTimerId) clearInterval(state.pollTimerId);
+    state.pollTimerId = setInterval(pollRoomState, 2000);
+  }
+
+  async function joinRoomSession() {
+    if (!state.userId || state.isGuest) return;
+    try {
+      const roomData = await postRoomJson('/api/studypod/room/join', {
+        userId: state.userId,
+        scenarioType: state.topic
+      });
+      showError('');
+      applyRoomState(roomData, { forceNoteScroll: true });
+      startRoomPolling();
+    } catch (err) {
+      if (err.status === 409) {
+        state.roomFull = true;
+        showError(err.message || 'Ruang latihan untuk topik ini sudah penuh (maksimal 2 peserta).');
+      } else {
+        showError(`Gagal terhubung ke ruang latihan: ${err.message}`);
+      }
+    }
   }
 
   function showError(msg) {
@@ -316,33 +564,23 @@
       clearInterval(state.captionTimerId);
       state.captionTimerId = null;
     }
+    if (state.pollTimerId) {
+      clearInterval(state.pollTimerId);
+      state.pollTimerId = null;
+    }
 
     const leaveBtn = document.getElementById('pr-leave-btn');
     const leaveText = leaveBtn?.querySelector('span');
     if (leaveBtn) leaveBtn.disabled = true;
-    if (leaveText) leaveText.textContent = 'Menyimpan...';
+    if (leaveText) leaveText.textContent = state.roomFull ? 'Kembali...' : 'Menyimpan...';
     showError('');
 
-    const session = window.getSession?.();
-    const userNotesCount = state.notes.filter((n) => !n.isSystem).length;
-    const elapsed = Math.max(0, state.totalSeconds - state.remainingSeconds);
-    const sentimentScore = Math.min(95.0, 85.0 + Math.min(4, userNotesCount) * 2.0 + (elapsed >= 30 ? 2.0 : 0.0));
-
-    if (session?.userId && !session.isGuest) {
+    if (!state.roomFull && state.userId && !state.isGuest) {
       try {
-        const res = await fetch('/api/studypod/sessions', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: session.userId,
-            sessionType: 'PEER_MATCH',
-            scenarioType: state.topic,
-            sentimentScore
-          })
+        await postRoomJson('/api/studypod/room/leave', {
+          userId: state.userId,
+          scenarioType: state.topic
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
       } catch (err) {
         state.leaving = false;
         if (leaveBtn) leaveBtn.disabled = false;
@@ -353,14 +591,18 @@
     }
 
     try {
-      window.sessionStorage.setItem(
-        'novastra_practice_notice',
-        'Sesi latihan selesai dan tercatat di riwayat StudyPod!'
-      );
+      window.sessionStorage.removeItem('novastra_active_topic');
+      window.sessionStorage.removeItem('novastra_active_topic_meta');
+      if (!state.roomFull) {
+        window.sessionStorage.setItem(
+          'novastra_practice_notice',
+          'Sesi latihan selesai dan tercatat di riwayat StudyPod!'
+        );
+      }
     } catch {
       // Ignore storage failures in restricted contexts
     }
-    window.location.href = '/quiz?completed=1';
+    window.location.href = state.roomFull ? '/quiz' : '/quiz?completed=1';
   }
 
   async function hydrateUserFromProfile(session) {
@@ -387,61 +629,104 @@
     }
   }
 
-  function initRoom() {
-    const session = window.requireAuth?.({ requireOnboarded: true });
-    if (!session) return;
-
-    state.userName = session.fullName || 'Learner';
-    state.userRole = session.roleName || 'Peserta Jalur Karier';
-
-    const cfg = TOPIC_TASKS[state.topic] || DEFAULT_TASK;
+  function applyTopicDetails(cfg) {
     const titleEl = document.getElementById('pr-topic-title');
-    const iconEl = document.getElementById('pr-topic-icon');
+    const iconWrap = document.getElementById('pr-topic-icon')?.closest('.pr-topic-icon-wrap');
     const taskAEl = document.getElementById('pr-task-a-text');
     const taskBEl = document.getElementById('pr-task-b-text');
     if (titleEl) titleEl.textContent = state.topic;
-    if (iconEl) iconEl.setAttribute('data-lucide', cfg.icon);
-    if (taskAEl) taskAEl.textContent = cfg.taskA;
-    if (taskBEl) taskBEl.textContent = cfg.taskB;
+    if (iconWrap) {
+      iconWrap.innerHTML = `<i id="pr-topic-icon" data-lucide="${esc(cfg.icon || 'briefcase')}" class="pr-topic-icon"></i>`;
+    }
+    if (taskAEl) taskAEl.textContent = cfg.taskA || DEFAULT_TASK.taskA;
+    if (taskBEl) taskBEl.textContent = cfg.taskB || DEFAULT_TASK.taskB;
+    refreshIcons();
+    syncNotesFromServer(state.lastServerNotes, false);
+  }
 
-    state.notes = [
-      { author: 'Sarah K.', time: '01:12', text: cfg.initialNote, isSystem: true }
-    ];
+  async function hydrateTopicFromApi(session) {
+    if (state.hasMatchedMeta || !session?.userId || session.isGuest) return;
+    try {
+      const res = await fetch(`/api/studypod/topics/${encodeURIComponent(session.userId)}`, {
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      const topics = Array.isArray(data?.topics) ? data.topics : [];
+      const targetKey = state.topic.toLowerCase();
+      const matched = topics.find((t) => String(t.title || '').trim().toLowerCase() === targetKey);
+      if (!matched) return;
+      state.topicConfig = resolveTopicConfig(state.topic, matched);
+      state.hasMatchedMeta = true;
+      try {
+        window.sessionStorage.setItem('novastra_active_topic_meta', JSON.stringify(matched));
+      } catch {
+        // Ignore storage restrictions
+      }
+      applyTopicDetails(state.topicConfig);
+    } catch {
+      // Non-blocking fallback to default task instructions
+    }
+  }
+
+  async function initRoom() {
+    const session = window.requireAuth?.({ requireOnboarded: true });
+    if (!session) return;
+
+    state.userId = session.userId || null;
+    state.isGuest = Boolean(session.isGuest);
+    state.userName = session.fullName || 'Learner';
+    state.userRole = session.roleName || 'Peserta Jalur Karier';
+
+    applyTopicDetails(state.topicConfig);
 
     syncUserIdentityUI();
     syncControlsUI();
-    renderNotes();
+    syncPartnerUI(null);
+    syncNotesFromServer([], true);
     refreshIcons();
     startCountdown();
     startCaptionRotation();
-    hydrateUserFromProfile(session);
 
-    const toggleMute = () => { state.muted = !state.muted; syncControlsUI(); };
+    const toggleMute = () => performRoomAction('TOGGLE_MUTE');
     document.getElementById('pr-btn-mute')?.addEventListener('click', toggleMute);
     document.getElementById('pr-user-mute-pill')?.addEventListener('click', toggleMute);
+    document.getElementById('pr-btn-hand')?.addEventListener('click', () => performRoomAction('TOGGLE_HAND'));
 
-    document.getElementById('pr-btn-hand')?.addEventListener('click', () => {
-      state.handRaised = !state.handRaised;
-      syncControlsUI();
-    });
-
-    document.getElementById('pr-note-form')?.addEventListener('submit', (e) => {
+    document.getElementById('pr-note-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = document.getElementById('pr-note-input');
+      const shareBtn = document.getElementById('pr-share-btn');
       const text = String(input?.value || '').trim();
       if (!text) return;
-      const elapsed = Math.max(0, state.totalSeconds - state.remainingSeconds);
-      state.notes.push({
-        author: `You (${getFirstName(state.userName)})`,
-        time: formatMmSs(elapsed),
-        text,
-        isSystem: false
-      });
-      if (input) input.value = '';
-      renderNotes();
+
+      if (!state.userId || state.isGuest) {
+        const elapsed = Math.max(0, state.totalSeconds - state.remainingSeconds);
+        state.notes.push({
+          senderName: `You (${getFirstName(state.userName)})`,
+          timestamp: formatMmSs(elapsed),
+          content: text
+        });
+        if (input) input.value = '';
+        renderNotes(true);
+        return;
+      }
+
+      if (shareBtn) shareBtn.disabled = true;
+      const updated = await performRoomAction('ADD_NOTE', text);
+      if (shareBtn) shareBtn.disabled = false;
+      if (updated && input) {
+        input.value = '';
+        input.focus();
+      }
     });
 
     document.getElementById('pr-leave-btn')?.addEventListener('click', finishAndLeaveRoom);
+
+    await hydrateUserFromProfile(session);
+    await hydrateTopicFromApi(session);
+    await joinRoomSession();
   }
 
   document.addEventListener('DOMContentLoaded', initRoom);

@@ -2,18 +2,38 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const state = {
-    selectedTopic: 'top-1',
+    selectedTopic: '',
+    topics: [],
+    roleName: '',
+    loading: true,
+    loadError: '',
     language: 'Bahasa Indonesia',
     sessionLength: '10 Mins (Quick Practice)',
     skillBadge: 'Matched',
     completionNotice: ''
   };
 
+  function toTopicItem(raw) {
+    return {
+      id: raw.id,
+      title: raw.title || raw.label || 'Practice Topic',
+      activePeers: raw.activePeers ?? 0,
+      icon: raw.icon || 'code',
+      taskA: raw.taskA || '',
+      taskB: raw.taskB || '',
+      initialRubric: raw.initialRubric || ''
+    };
+  }
+
+  function fallbackTopics() {
+    return (window.NOVASTRA_DATA?.TOPICS || []).map(toTopicItem);
+  }
+
   function render() {
     const main = document.getElementById('main-content');
     if (!main) return;
-    const topics = window.NOVASTRA_DATA?.TOPICS || [];
-    const activeTopic = topics.find((t) => t.id === state.selectedTopic) || topics[0];
+    const topics = state.topics;
+    const activeTopic = topics.find((t) => t.id === state.selectedTopic) || topics[0] || null;
     const totalOnline = topics.reduce((acc, t) => acc + (t.activePeers || 0), 0);
 
     main.innerHTML = `
@@ -36,14 +56,32 @@
 
       <div class="grid grid-cols-1 min-[900px]:grid-cols-[64fr_36fr] gap-6 items-start">
         <section class="p-6 rounded-3xl bg-white border border-[#E8E2DA] space-y-4">
-          <div>
-            <h2 class="text-lg font-black text-[#2C2A27]">Choose a Practice Focus</h2>
-            <p class="text-xs text-[#6B6560] mt-0.5">Pilih satu fokus latihan untuk dipasangkan dengan peer yang setara.</p>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 class="text-lg font-black text-[#2C2A27]">Choose a Practice Focus</h2>
+              <p class="text-xs text-[#6B6560] mt-0.5">Pilih satu fokus latihan untuk dipasangkan dengan peer yang setara.</p>
+            </div>
+            ${state.roleName ? `
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FDF0EB] border border-[#D97757]/30 text-[11px] font-extrabold text-[#D97757]">
+                <i data-lucide="compass" class="w-3.5 h-3.5"></i>
+                Disesuaikan untuk jalur: ${esc(state.roleName)}
+              </span>
+            ` : ''}
           </div>
 
+          ${state.loadError ? `
+            <div class="p-3 rounded-xl bg-[#FDF0EB]/70 border border-[#D97757]/40 text-xs font-bold text-[#B85738]">
+              ${esc(state.loadError)}
+            </div>
+          ` : ''}
+
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            ${topics.slice(0, 6).map((t) => {
-              const active = state.selectedTopic === t.id;
+            ${state.loading ? `
+              <div class="col-span-full py-10 text-center text-xs font-bold text-[#6B6560]">
+                Memuat topik latihan sesuai jalur karier Anda...
+              </div>
+            ` : topics.slice(0, 6).map((t) => {
+              const active = activeTopic?.id === t.id;
               return `
                 <button type="button" data-topic-id="${esc(t.id)}" class="text-left p-4 rounded-2xl border transition-all flex items-start justify-between gap-3 cursor-pointer ${active ? 'bg-[#FDF0EB]/70 border-[#D97757] shadow-sm' : 'bg-[#FAF8F5] border-[#E8E2DA] hover:border-[#D97757]/60'}">
                   <div class="flex items-start gap-3 min-w-0">
@@ -51,7 +89,7 @@
                       <i data-lucide="${esc(t.icon || 'code')}" class="w-5 h-5"></i>
                     </div>
                     <div class="min-w-0">
-                      <p class="text-sm font-extrabold text-[#2C2A27] leading-snug">${esc(t.label)}</p>
+                      <p class="text-sm font-extrabold text-[#2C2A27] leading-snug">${esc(t.title)}</p>
                       <p class="text-[11px] font-semibold text-[#6B6560] mt-1">${t.activePeers} peers aktif</p>
                     </div>
                   </div>
@@ -92,8 +130,8 @@
             <span class="text-xs font-black text-[#2C2A27] font-mono">${totalOnline} online</span>
           </div>
 
-          <button type="button" id="qz-enter-room" class="w-full h-[52px] rounded-2xl bg-[#D97757] hover:opacity-95 text-white text-sm font-extrabold shadow-sm transition-opacity cursor-pointer">
-            Masuk Live Practice Room (${esc(activeTopic?.label?.split(' ')[0] || 'Match')})
+          <button type="button" id="qz-enter-room" ${!activeTopic ? 'disabled' : ''} class="w-full h-[52px] rounded-2xl bg-[#D97757] hover:opacity-95 disabled:opacity-50 text-white text-sm font-extrabold shadow-sm transition-opacity cursor-pointer">
+            Masuk Live Practice Room (${esc(activeTopic?.title?.split(' ')[0] || 'Match')})
           </button>
         </aside>
       </div>
@@ -105,8 +143,22 @@
 
   function enterPracticeRoom(topics) {
     const activeTopic = topics.find((t) => t.id === state.selectedTopic) || topics[0];
+    if (!activeTopic) return;
+    try {
+      window.sessionStorage.setItem('novastra_active_topic', activeTopic.title);
+      window.sessionStorage.setItem('novastra_active_topic_meta', JSON.stringify({
+        id: activeTopic.id,
+        title: activeTopic.title,
+        icon: activeTopic.icon,
+        taskA: activeTopic.taskA,
+        taskB: activeTopic.taskB,
+        initialRubric: activeTopic.initialRubric
+      }));
+    } catch {
+      // Non-blocking if storage is restricted
+    }
     const query = new URLSearchParams({
-      topic: activeTopic?.label || 'System Design & Arsitektur API',
+      topic: activeTopic.title,
       duration: String(parseInt(state.sessionLength, 10) || 10),
       lang: state.language
     });
@@ -134,8 +186,41 @@
     document.getElementById('qz-enter-room')?.addEventListener('click', () => enterPracticeRoom(topics));
   }
 
+  async function loadRoleTopics(session) {
+    if (!session?.userId || session.isGuest) {
+      state.topics = fallbackTopics();
+      state.selectedTopic = state.topics[0]?.id || '';
+      state.loading = false;
+      render();
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/studypod/topics/${encodeURIComponent(session.userId)}`, {
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+
+      state.roleName = data.roleName || session.roleName || '';
+      const serverTopics = Array.isArray(data.topics) ? data.topics.map(toTopicItem) : [];
+      state.topics = serverTopics.length ? serverTopics : fallbackTopics();
+      state.loadError = '';
+    } catch {
+      state.roleName = session.roleName || '';
+      state.topics = fallbackTopics();
+      state.loadError = 'Gagal memuat topik spesifik role dari server — menampilkan daftar standar.';
+    } finally {
+      state.selectedTopic = state.topics[0]?.id || '';
+      state.loading = false;
+      render();
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
-    if (window.requireAuth && !window.requireAuth({ requireOnboarded: true })) return;
+    const session = window.requireAuth ? window.requireAuth({ requireOnboarded: true }) : null;
+    if (window.requireAuth && !session) return;
     try {
       const stored = window.sessionStorage.getItem('novastra_practice_notice');
       if (stored) {
@@ -151,5 +236,6 @@
       window.history.replaceState({}, '', window.location.pathname);
     }
     render();
+    loadRoleTopics(session);
   });
 })();

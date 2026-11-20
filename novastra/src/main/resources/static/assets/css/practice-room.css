@@ -196,6 +196,11 @@ body.pr-page {
   box-shadow: 0 12px 32px rgba(94, 110, 100, 0.1);
 }
 
+.pr-peer-card--waiting {
+  border: 1.5px dashed #D8CFC7;
+  background: #FBF9F7;
+}
+
 .pr-card-top {
   display: flex;
   align-items: center;
@@ -254,6 +259,16 @@ body.pr-page {
   margin-bottom: 20px;
 }
 
+.pr-avatar-outer-ring.is-waiting {
+  border-style: dashed;
+  border-color: #D2C8BF;
+  animation: pr-pulse-ring 2.2s ease-in-out infinite;
+}
+
+.pr-avatar-outer-ring.is-muted {
+  border-color: #E2C5C5;
+}
+
 .pr-avatar-outer-ring .pr-avatar-ring--sage {
   margin-bottom: 0;
 }
@@ -310,6 +325,32 @@ body.pr-page {
   background: var(--pr-danger-bg);
   border-color: #F5C2C2;
   color: var(--pr-danger-text);
+}
+
+div.pr-mute-pill {
+  cursor: default;
+}
+
+.pr-waiting-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #F3EFEA;
+  border: 1px solid #E5DDD5;
+  color: var(--pr-text-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pr-waiting-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pr-terra);
+  flex-shrink: 0;
+  animation: pr-pulse-dot 1.4s ease-in-out infinite;
 }
 
 /* Audio Waveform */
@@ -690,6 +731,16 @@ body.pr-page {
 @keyframes pr-wave {
   0%, 100% { transform: scaleY(0.45); opacity: 0.65; }
   50% { transform: scaleY(1.25); opacity: 1; }
+}
+
+@keyframes pr-pulse-dot {
+  0%, 100% { transform: scale(0.85); opacity: 0.45; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+@keyframes pr-pulse-ring {
+  0%, 100% { opacity: 0.72; transform: scale(0.985); }
+  50% { opacity: 1; transform: scale(1.015); }
 }
 
 @media (max-width: 1080px) {
