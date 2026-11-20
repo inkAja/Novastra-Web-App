@@ -9,21 +9,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.jarvis.novastra.config.NovastraDataSeeder;
 import com.jarvis.novastra.entity.CareerRole;
+import com.jarvis.novastra.entity.Certificate;
 import com.jarvis.novastra.entity.Course;
 import com.jarvis.novastra.entity.CourseModule;
 import com.jarvis.novastra.entity.PortfolioProject;
 import com.jarvis.novastra.entity.PortfolioSubmission;
 import com.jarvis.novastra.entity.Skill;
+import com.jarvis.novastra.entity.StudyPodSession;
 import com.jarvis.novastra.entity.User;
 import com.jarvis.novastra.repository.CareerRoleRepository;
 import com.jarvis.novastra.repository.CareerSkillCalculationRepository;
+import com.jarvis.novastra.repository.CertificateRepository;
 import com.jarvis.novastra.repository.CourseModuleRepository;
 import com.jarvis.novastra.repository.CourseRepository;
+import com.jarvis.novastra.repository.EnrollmentRepository;
 import com.jarvis.novastra.repository.MicroTaskRepository;
 import com.jarvis.novastra.repository.MicroTaskResultRepository;
 import com.jarvis.novastra.repository.PortfolioProjectRepository;
 import com.jarvis.novastra.repository.PortfolioSubmissionRepository;
 import com.jarvis.novastra.repository.SkillRepository;
+import com.jarvis.novastra.repository.StudyPodSessionRepository;
 import com.jarvis.novastra.repository.UserRepository;
 import com.jarvis.novastra.repository.UserSkillGapRepository;
 import com.jarvis.novastra.service.AuthService;
@@ -32,7 +37,9 @@ import com.jarvis.novastra.service.DashboardService;
 import com.jarvis.novastra.service.EnrollmentService;
 import com.jarvis.novastra.service.MicroTaskService;
 import com.jarvis.novastra.service.OnboardingService;
+import com.jarvis.novastra.service.ProfileService;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -45,6 +52,12 @@ class NovastraApplicationTests {
 
 	@Autowired
 	private CourseRepository courseRepository;
+
+	@Autowired
+	private CertificateRepository certificateRepository;
+
+	@Autowired
+	private EnrollmentRepository enrollmentRepository;
 
 	@Autowired
 	private CourseModuleRepository courseModuleRepository;
@@ -71,6 +84,9 @@ class NovastraApplicationTests {
 	private SkillRepository skillRepository;
 
 	@Autowired
+	private StudyPodSessionRepository studyPodSessionRepository;
+
+	@Autowired
 	private UserRepository userRepository;
 
 	@Autowired
@@ -93,6 +109,9 @@ class NovastraApplicationTests {
 
 	@Autowired
 	private MicroTaskService microTaskService;
+
+	@Autowired
+	private ProfileService profileService;
 
 	@Autowired
 	private NovastraDataSeeder dataSeeder;
@@ -571,6 +590,173 @@ class NovastraApplicationTests {
 		Map<String, Object> refreshedFirst = ((List<Map<String, Object>>) refreshed.get("portfolioProjects")).get(0);
 		assertEquals("SUBMITTED", refreshedFirst.get("status"));
 		assertEquals(updatedUrl, refreshedFirst.get("externalUrl"));
+	}
+
+	@Test
+	@Transactional
+	@SuppressWarnings("unchecked")
+	void profileAggregatesDailyConsistencyCertificatesAndVerifiedPortfolio() {
+		assertEquals(0, ProfileService.computeIntensityLevel(0));
+		assertEquals(1, ProfileService.computeIntensityLevel(1));
+		assertEquals(2, ProfileService.computeIntensityLevel(2));
+		assertEquals(3, ProfileService.computeIntensityLevel(3));
+		assertEquals(3, ProfileService.computeIntensityLevel(4));
+		assertEquals(4, ProfileService.computeIntensityLevel(5));
+
+		// Seeded user USR01 has real certificates & audited submissions in DB-Novastra
+		Map<String, Object> seeded = profileService.getProfile("USR01");
+		assertEquals("Nia Larsson", seeded.get("fullName"));
+		assertEquals("nia.larsson@novastra.id", seeded.get("email"));
+		assertEquals(14, seeded.get("streakCount"));
+		List<Map<String, Object>> seededCerts = (List<Map<String, Object>>) seeded.get("certificates");
+		assertEquals(1, seededCerts.size());
+		assertEquals("CRT01", seededCerts.get(0).get("certificateId"));
+		assertFalse(String.valueOf(seededCerts.get(0).get("courseTitle")).isBlank());
+		List<Map<String, Object>> seededPow = (List<Map<String, Object>>) seeded.get("verifiedProofOfWork");
+		assertEquals(2, seededPow.size());
+		assertEquals(90, seeded.get("avgAiScore"));
+		assertEquals(140, ((List<?>) seeded.get("dailyConsistency")).size());
+
+		// Fresh onboarded user starts with only joined_at activity today and empty cert/PoW lists
+		User user = authService.register("Profile Verifier", "profile.rol03@novastra.id", "secret123");
+		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
+		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+		onboardingService.saveOnboarding(
+				user.getUserId(), role.getRoleId(), 30, 1, List.of(roleSkills.get(0).getSkillId()));
+
+		Map<String, Object> initialProfile = profileService.getProfile(user.getUserId());
+		assertTrue(((List<?>) initialProfile.get("certificates")).isEmpty());
+		assertTrue(((List<?>) initialProfile.get("verifiedProofOfWork")).isEmpty());
+		assertEquals(0, initialProfile.get("avgAiScore"));
+		List<Map<String, Object>> initialDays = (List<Map<String, Object>>) initialProfile.get("dailyConsistency");
+		assertEquals(140, initialDays.size());
+		Map<String, Object> initialToday = initialDays.get(initialDays.size() - 1);
+		assertEquals(LocalDate.now().toString(), initialToday.get("date"));
+		assertEquals(1, initialToday.get("count"));
+		assertEquals(1, initialToday.get("level"));
+
+		// Add today's activities across enrollment (1), micro_task_result (2), and studypod_session (1) -> total 5
+		Map<String, Object> roadmap = careerService.getCareerRoadmap(user.getUserId());
+		List<Map<String, Object>> curriculum = (List<Map<String, Object>>) roadmap.get("curriculum");
+		enrollmentService.enroll(user.getUserId(), String.valueOf(curriculum.get(0).get("courseId")));
+
+		List<Map<String, Object>> blindTests = (List<Map<String, Object>>) roadmap.get("blindTests");
+		List<Map<String, Object>> firstTasks = (List<Map<String, Object>>) blindTests.get(0).get("tasks");
+		microTaskService.submitBlindTest(
+				user.getUserId(),
+				firstTasks.stream()
+						.map(t -> new MicroTaskService.BlindTestAnswer(
+								String.valueOf(t.get("taskId")),
+								"Implementasi solusi arsitektur teruji dengan validasi lengkap."))
+						.toList());
+
+		StudyPodSession pod = new StudyPodSession();
+		pod.setSessionId("SPS99");
+		pod.setUserId(user.getUserId());
+		pod.setSessionType("AI_ROLEPLAY");
+		pod.setScenarioType("Code Review Readiness Drill");
+		pod.setSentimentScore(BigDecimal.valueOf(88.50));
+		pod.setSessionDate(LocalDate.now());
+		studyPodSessionRepository.save(pod);
+
+		// Unaudited submission (score = 0.00) must NOT appear in Verified Proof of Work
+		PortfolioSubmission pending = new PortfolioSubmission();
+		pending.setSubmissionId("SB999");
+		pending.setUserId(user.getUserId());
+		pending.setProjectId(String.valueOf(((List<Map<String, Object>>) roadmap.get("portfolioProjects")).get(0).get("projectId")));
+		pending.setExternalUrl("https://github.com/novastra/pending-audit");
+		pending.setScore(BigDecimal.ZERO);
+		pending.setFeedbackNotes("Menunggu proses AI Audit...");
+		pending.setStatus("SUBMITTED");
+		portfolioSubmissionRepository.save(pending);
+
+		Map<String, Object> activeProfile = profileService.getProfile(user.getUserId());
+		List<Map<String, Object>> activeDays = (List<Map<String, Object>>) activeProfile.get("dailyConsistency");
+		Map<String, Object> activeToday = activeDays.get(activeDays.size() - 1);
+		assertEquals(5, activeToday.get("count"));
+		assertEquals(4, activeToday.get("level"));
+		assertTrue(((List<?>) activeProfile.get("verifiedProofOfWork")).isEmpty());
+		assertEquals(0, activeProfile.get("avgAiScore"));
+	}
+
+	@Test
+	@Transactional
+	@SuppressWarnings("unchecked")
+	void profileSettingsUpdateAndPermanentDeleteWorkWithoutFkErrors() {
+		User user = authService.register("Settings Tester", "settings.rol03@novastra.id", "secret123");
+		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
+		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+		onboardingService.saveOnboarding(
+				user.getUserId(), role.getRoleId(), 30, 1, List.of(roleSkills.get(0).getSkillId()));
+		String uid = user.getUserId();
+
+		// 1. Update name & email with empty newPassword -> old password must stay intact
+		Map<String, Object> updated = profileService.updateProfile(
+				uid, "Settings Updated", "SETTINGS.NEW@novastra.id", "");
+		assertEquals("Settings Updated", updated.get("fullName"));
+		assertEquals("settings.new@novastra.id", updated.get("email"));
+		assertEquals(uid, authService.login("settings.new@novastra.id", "secret123").getUserId());
+
+		// 2. Duplicate email used by another account must fail cleanly
+		IllegalArgumentException dupEx = assertThrows(IllegalArgumentException.class, () ->
+				profileService.updateProfile(uid, "Settings Updated", "nia.larsson@novastra.id", ""));
+		assertEquals("Email sudah digunakan oleh akun lain.", dupEx.getMessage());
+
+		// 3. Too-short newPassword must fail
+		assertThrows(IllegalArgumentException.class, () ->
+				profileService.updateProfile(uid, "Settings Updated", "settings.new@novastra.id", "123"));
+
+		// 4. Valid newPassword updates password_user in PostgreSQL
+		profileService.updateProfile(uid, "Settings Final", "settings.final@novastra.id", "newSecret99");
+		assertEquals(uid, authService.login("settings.final@novastra.id", "newSecret99").getUserId());
+
+		// 5. Populate all 6 FK child tables then permanently delete the account
+		Map<String, Object> roadmap = careerService.getCareerRoadmap(uid);
+		String courseId = String.valueOf(((List<Map<String, Object>>) roadmap.get("curriculum")).get(0).get("courseId"));
+		enrollmentService.enroll(uid, courseId);
+
+		List<Map<String, Object>> tasks = (List<Map<String, Object>>) ((List<Map<String, Object>>) roadmap.get("blindTests")).get(0).get("tasks");
+		microTaskService.submitBlindTest(uid, List.of(new MicroTaskService.BlindTestAnswer(
+				String.valueOf(tasks.get(0).get("taskId")),
+				"Jawaban validasi teknis lengkap untuk memenuhi pengujian micro-task.")));
+
+		PortfolioSubmission sub = new PortfolioSubmission();
+		sub.setSubmissionId("SB998");
+		sub.setUserId(uid);
+		sub.setProjectId(String.valueOf(((List<Map<String, Object>>) roadmap.get("portfolioProjects")).get(0).get("projectId")));
+		sub.setExternalUrl("https://github.com/novastra/delete-check");
+		sub.setScore(BigDecimal.valueOf(91.00));
+		sub.setFeedbackNotes("Audit lolos sebelum uji hapus akun.");
+		sub.setStatus("Approved");
+		portfolioSubmissionRepository.save(sub);
+
+		StudyPodSession pod = new StudyPodSession();
+		pod.setSessionId("SPS98");
+		pod.setUserId(uid);
+		pod.setSessionType("AI_ROLEPLAY");
+		pod.setScenarioType("Delete Cascade Drill");
+		pod.setSentimentScore(BigDecimal.valueOf(85.00));
+		pod.setSessionDate(LocalDate.now());
+		studyPodSessionRepository.save(pod);
+
+		Certificate cert = new Certificate();
+		cert.setCertificateId("CRT99");
+		cert.setUserId(uid);
+		cert.setCourseId(courseId);
+		cert.setCredentialUrl("https://novastra.id/cert/CRT99");
+		cert.setIssueDate(LocalDate.now());
+		certificateRepository.save(cert);
+
+		profileService.deleteUserAccount(uid);
+
+		assertFalse(userRepository.existsById(uid));
+		LocalDate today = LocalDate.now();
+		assertTrue(microTaskResultRepository.findByUserIdAndCompletedAtBetween(uid, today.minusDays(1), today.plusDays(1)).isEmpty());
+		assertTrue(portfolioSubmissionRepository.findByUserId(uid).isEmpty());
+		assertTrue(certificateRepository.findByUserIdOrderByIssueDateDesc(uid).isEmpty());
+		assertTrue(studyPodSessionRepository.findByUserIdAndSessionDateBetween(uid, today.minusDays(1), today.plusDays(1)).isEmpty());
+		assertTrue(enrollmentRepository.findByUserId(uid).isEmpty());
+		assertTrue(userSkillGapRepository.findByUserId(uid).isEmpty());
 	}
 
 }
