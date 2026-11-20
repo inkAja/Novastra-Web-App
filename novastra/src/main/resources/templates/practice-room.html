@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novastra — Live Practice Room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&amp;family=Nunito:wght@600;700;800;900&amp;display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/assets/css/practice-room.css?v=2" />
+</head>
+<body data-page="practice-room" class="pr-page">
+  <div class="pr-shell">
+    <div id="pr-error-banner" class="pr-error-banner is-hidden" role="alert"></div>
+
+    <header class="pr-topbar">
+      <div class="pr-topbar-left">
+        <button type="button" id="pr-leave-btn" class="pr-leave-btn">
+          <i data-lucide="x" class="pr-icon-sm"></i>
+          <span>Leave Room</span>
+        </button>
+      </div>
+
+      <div class="pr-topbar-center">
+        <div class="pr-topic-group">
+          <span class="pr-topic-icon-wrap" aria-hidden="true">
+            <i id="pr-topic-icon" data-lucide="briefcase" class="pr-topic-icon"></i>
+          </span>
+          <h1 id="pr-topic-title" class="pr-topic-title">System Design &amp; Arsitektur API</h1>
+        </div>
+      </div>
+
+      <div class="pr-topbar-right">
+        <div class="pr-timer-pill" aria-live="polite">
+          <span id="pr-timer-value" class="pr-timer-value">10:00</span>
+          <span class="pr-timer-label">remaining</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="pr-grid">
+      <section class="pr-left-col" aria-label="Ruang Latihan Peer">
+        <div class="pr-peers-row">
+          <article id="pr-card-user" class="pr-peer-card pr-peer-card--user">
+            <div class="pr-card-top">
+              <span id="pr-hand-badge" class="pr-hand-badge is-hidden">
+                <i data-lucide="hand" class="pr-icon-xs"></i>
+                <span>Hand Raised</span>
+              </span>
+            </div>
+
+            <div class="pr-peer-center">
+              <div class="pr-avatar-ring pr-avatar-ring--terra">
+                <span id="pr-user-initials" class="pr-avatar-initials">NL</span>
+              </div>
+              <h2 id="pr-user-name" class="pr-peer-name">You (Learner)</h2>
+              <p id="pr-user-role" class="pr-peer-role">Full-Stack Web Developer</p>
+              <button type="button" id="pr-user-mute-pill" class="pr-mute-pill">
+                <span id="pr-user-mute-text">Speaking / Tap to mute</span>
+              </button>
+            </div>
+
+            <div id="pr-user-caption" class="pr-caption-box pr-caption-box--user" aria-live="polite">
+              <span class="pr-caption-speaker">You:</span>
+              <span id="pr-user-caption-text" class="pr-caption-text">"Siap mempresentasikan solusi teknis dan trade-off utama."</span>
+            </div>
+          </article>
+
+          <article id="pr-card-peer" class="pr-peer-card pr-peer-card--active">
+            <div class="pr-card-top" aria-hidden="true"></div>
+
+            <div class="pr-peer-center">
+              <div class="pr-avatar-outer-ring">
+                <div class="pr-avatar-ring pr-avatar-ring--sage">
+                  <span class="pr-avatar-initials pr-avatar-initials--sage">SK</span>
+                </div>
+              </div>
+              <h2 class="pr-peer-name">Sarah K.</h2>
+              <p id="pr-peer-role" class="pr-peer-role">Senior Peer / Growth Strategist</p>
+              <div class="pr-speaking-row">
+                <div id="pr-peer-waveform" class="pr-waveform" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <span class="pr-speaking-label">Speaking...</span>
+              </div>
+            </div>
+
+            <div id="pr-peer-caption" class="pr-caption-box pr-caption-box--peer" aria-live="polite">
+              <span class="pr-caption-speaker">Sarah K.:</span>
+              <span id="pr-peer-caption-text" class="pr-caption-text">"Bisa jelaskan bagaimana kamu menangani rate limiting di API gateway?"</span>
+            </div>
+          </article>
+        </div>
+
+        <div class="pr-dock-card" role="toolbar" aria-label="Kontrol Audio dan Angkat Tangan">
+          <div class="pr-dock-controls">
+            <button type="button" id="pr-btn-mute" class="pr-ctrl-btn" aria-pressed="false">
+              <i data-lucide="mic" class="pr-icon-sm"></i>
+              <span>Mute</span>
+            </button>
+            <button type="button" id="pr-btn-hand" class="pr-ctrl-btn" aria-pressed="false">
+              <i data-lucide="hand" class="pr-icon-sm"></i>
+              <span>Raise Hand</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="pr-sidebar-card" aria-label="Tugas dan Catatan Bersama">
+        <div class="pr-sidebar-top">
+          <div class="pr-sidebar-header">
+            <div class="pr-sidebar-title-group">
+              <span class="pr-clipboard-box">
+                <i data-lucide="clipboard-list" class="pr-icon-sm"></i>
+              </span>
+              <h2 class="pr-sidebar-title">Current Task</h2>
+            </div>
+            <span class="pr-duration-pill">3 Mins</span>
+          </div>
+
+          <div class="pr-task-list">
+            <div class="pr-task-card pr-task-card--terra">
+              <span class="pr-task-badge pr-task-badge--terra">A</span>
+              <p class="pr-task-text">
+                <strong>Peer A (You):</strong>
+                <span id="pr-task-a-text">Jelaskan arsitektur layanan dan trade-off skalabilitas secara ringkas tanpa slide.</span>
+              </p>
+            </div>
+
+            <div class="pr-task-card pr-task-card--sage">
+              <span class="pr-task-badge pr-task-badge--sage">B</span>
+              <p class="pr-task-text">
+                <strong>Peer B (Sarah):</strong>
+                <span id="pr-task-b-text">Berikan 2 umpan balik konstruktif — 1 kekuatan utama dan 1 area perbaikan teknis.</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="pr-notes-section">
+            <p class="pr-notes-heading">SHARED LINKS &amp; NOTES</p>
+            <div id="pr-notes-list" class="pr-notes-list"></div>
+          </div>
+        </div>
+
+        <form id="pr-note-form" class="pr-share-form">
+          <i data-lucide="link-2" class="pr-share-icon"></i>
+          <input id="pr-note-input" type="text" maxlength="240" autocomplete="off" placeholder="Share Figma / Doc link..." class="pr-share-input" />
+          <button type="submit" id="pr-share-btn" class="pr-share-btn">
+            <i data-lucide="send" class="pr-icon-xs"></i>
+            <span>Share</span>
+          </button>
+        </form>
+      </aside>
+    </main>
+  </div>
+
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/practice-room.js?v=2"></script>
+</body>
+</html>

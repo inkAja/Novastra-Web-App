@@ -56,6 +56,11 @@ public class PageController {
         return "quiz";
     }
 
+    @GetMapping({"/practice-room", "/practice-room.html"})
+    public String practiceRoom() {
+        return "practice-room";
+    }
+
     @GetMapping("/career")
     public String career() {
         return "career";
