@@ -1,18 +1,18 @@
 (() => {
   const NAV_ITEMS = [
-    { key: 'home', href: '/home', label: 'Home', icon: 'layout-dashboard' },
-    { key: 'courses', href: '/courses', label: 'Courses', icon: 'book-open' },
-    { key: 'quiz', href: '/quiz', label: 'Blind Test', icon: 'shield-check' },
-    { key: 'career', href: '/career', label: 'Career', icon: 'compass' },
+    { key: 'home', href: '/home', label: 'Home', icon: 'home' },
+    { key: 'courses', href: '/learn', label: 'Learn', icon: 'book-open' },
+    { key: 'career', href: '/career', label: 'Career', icon: 'briefcase' },
     { key: 'profile', href: '/profile', label: 'Profile', icon: 'user' }
   ];
 
   const PAGE_LABELS = {
     home: 'Home',
-    courses: 'Courses',
+    courses: 'Learn Workspace',
+    learn: 'Learn Workspace',
     'course-detail': 'Course Detail',
-    quiz: 'Blind Test',
-    career: 'Career & Peers',
+    quiz: 'StudyPod · Peer Practice',
+    career: 'Career',
     profile: 'Profile'
   };
 
@@ -39,7 +39,7 @@
     style.textContent = `
       .nv-sidebar, .nv-topbar { display: none; }
       .nv-mobile-header { display: flex; position: sticky; top: 0; height: 60px; z-index: 30; background: #FAF8F5; border-bottom: 1px solid #EAE4DC; }
-      .nv-bottom-nav { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; height: 64px; z-index: 30; background: #FAF8F5; border-top: 1px solid #EAE4DC; }
+      .nv-bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; height: 64px; z-index: 30; background: #FAF8F5; border-top: 1px solid #EAE4DC; }
       .nv-main-shell { margin-left: 0; padding-bottom: 84px; }
       @media (min-width: 900px) {
         .nv-sidebar { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; width: 260px; background: #FAF8F5; border-right: 1px solid #EAE4DC; z-index: 30; }
@@ -53,21 +53,27 @@
 
   function buildBreadcrumb(pageKey, options = {}) {
     const activeSection = PAGE_LABELS[pageKey] || 'Home';
-    const parts = [{ label: 'Novastra', href: '/home' }];
-    if (pageKey === 'course-detail') {
-      parts.push({ label: 'Courses', href: '/courses' });
-      const id = options.courseId || new URLSearchParams(window.location.search).get('id');
+    let parts;
+    if (pageKey === 'courses' || pageKey === 'learn') {
+      parts = [{ label: 'Learn', href: '/learn' }, { label: options.breadcrumb || 'Learn Workspace' }];
+    } else if (pageKey === 'quiz') {
+      parts = [{ label: 'Learn', href: '/learn' }, { label: 'StudyPod · Peer Practice' }];
+    } else if (pageKey === 'course-detail') {
+      const id = options.courseId || new URLSearchParams(window.location.search).get('id') || new URLSearchParams(window.location.search).get('courseId');
       const course = (window.NOVASTRA_DATA?.COURSES || []).find((c) => c.id === id);
-      parts.push({ label: options.breadcrumb || course?.title || 'Course Detail' });
+      parts = [{ label: 'Learn', href: '/learn' }, { label: options.breadcrumb || course?.title || 'Course Detail' }];
     } else {
-      parts.push({ label: options.breadcrumb || activeSection });
+      parts = [{ label: 'Novastra', href: '/home' }, { label: options.breadcrumb || activeSection }];
     }
+    const separator = (pageKey === 'courses' || pageKey === 'learn')
+      ? '<span class="text-[#C7BEB5] font-semibold">/</span>'
+      : '<i data-lucide="chevron-right" class="w-4 h-4 text-[#A89F98] shrink-0"></i>';
     return parts.map((p, idx) => {
       const isLast = idx === parts.length - 1;
       const item = p.href && !isLast
         ? `<a href="${p.href}" class="text-[#6B6560] hover:text-[#D97757] transition-colors">${esc(p.label)}</a>`
         : `<span class="${isLast ? 'font-bold text-[#2C2A27] truncate max-w-[260px]' : 'text-[#6B6560]'}">${esc(p.label)}</span>`;
-      return idx > 0 ? `<i data-lucide="chevron-right" class="w-4 h-4 text-[#A89F98] shrink-0"></i>${item}` : item;
+      return idx > 0 ? `${separator}${item}` : item;
     }).join('');
   }
 
@@ -202,6 +208,11 @@
       if (el) el.addEventListener(id === 'nv-search-input' ? 'input' : 'change', updateSearchResults);
     });
 
+    const learnSearchInput = document.getElementById('nv-learn-search');
+    learnSearchInput?.addEventListener('input', (e) => {
+      window.dispatchEvent(new CustomEvent('nv:learn-search', { detail: { query: e.target.value } }));
+    });
+
     const bellBtn = document.getElementById('nv-notif-btn');
     const popover = document.getElementById('nv-notif-popover');
     bellBtn?.addEventListener('click', (e) => {
@@ -238,7 +249,8 @@
       document.getElementById(id)?.remove();
     });
 
-    const activeKey = pageKey === 'course-detail' ? 'courses' : pageKey;
+    const activeKey = (pageKey === 'course-detail' || pageKey === 'quiz' || pageKey === 'learn') ? 'courses' : pageKey;
+    const isLearnPage = pageKey === 'courses' || pageKey === 'learn';
     const streakCount = session.streakCount ?? window.NovastraStore?.getStreak?.()?.count ?? 0;
     const initials = String(session.fullName || 'NA').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || 'NA';
 
@@ -290,13 +302,20 @@
           ${buildBreadcrumb(pageKey, options)}
         </div>
         <div class="flex items-center gap-3 shrink-0">
-          <button type="button" data-nv-open-search style="width: 360px;" class="max-w-[360px] h-10 px-4 rounded-full bg-white border border-[#E8E2DA] hover:border-[#D97757] flex items-center justify-between text-xs text-[#A89F98] transition-colors cursor-pointer">
-            <span class="flex items-center gap-2 truncate">
-              <i data-lucide="search" class="w-4 h-4 text-[#6B6560] shrink-0"></i>
-              <span class="truncate">Cari kursus, skill, atau topik...</span>
-            </span>
-            <kbd class="px-2 py-0.5 rounded-md bg-[#F5F0EA] text-[#6B6560] font-mono text-[10px]">Ctrl K</kbd>
-          </button>
+          ${isLearnPage ? `
+            <label style="width: 340px;" class="max-w-[340px] h-10 px-4 rounded-full bg-white border border-[#E8E2DA] focus-within:border-[#D96B43] flex items-center gap-2 text-xs transition-colors">
+              <i data-lucide="search" class="w-4 h-4 text-[#A89F98] shrink-0"></i>
+              <input id="nv-learn-search" type="search" placeholder="Search courses, skills..." autocomplete="off" class="w-full bg-transparent text-xs font-medium text-[#2C2A27] placeholder-[#A89F98] focus:outline-none" />
+            </label>
+          ` : `
+            <button type="button" data-nv-open-search style="width: 360px;" class="max-w-[360px] h-10 px-4 rounded-full bg-white border border-[#E8E2DA] hover:border-[#D97757] flex items-center justify-between text-xs text-[#A89F98] transition-colors cursor-pointer">
+              <span class="flex items-center gap-2 truncate">
+                <i data-lucide="search" class="w-4 h-4 text-[#6B6560] shrink-0"></i>
+                <span class="truncate">Cari kursus, skill, atau topik...</span>
+              </span>
+              <kbd class="px-2 py-0.5 rounded-md bg-[#F5F0EA] text-[#6B6560] font-mono text-[10px]">Ctrl K</kbd>
+            </button>
+          `}
           <div class="relative">
             <button id="nv-notif-btn" type="button" class="relative w-10 h-10 rounded-full bg-white border border-[#E8E2DA] hover:border-[#D97757] flex items-center justify-center text-[#6B6560] transition-colors cursor-pointer" aria-label="Notifikasi">
               <i data-lucide="bell" class="w-4 h-4"></i>

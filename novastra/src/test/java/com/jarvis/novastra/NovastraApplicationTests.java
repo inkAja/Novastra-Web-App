@@ -1007,4 +1007,33 @@ class NovastraApplicationTests {
 				.andExpect(status().isNotFound());
 	}
 
+	@Test
+	@Transactional
+	void learnWorkspaceReturnsAllCoursesModulesAssessmentsAndSkillGaps() throws Exception {
+		CareerRole role = careerRoleRepository.findByRoleName("Data Analyst")
+				.orElseThrow();
+		List<Skill> skills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+
+		User user = authService.register("Learn Workspace Tester", "learn.ws@novastra.id", "secret123");
+		onboardingService.saveOnboarding(
+				user.getUserId(), role.getRoleId(), 30, 1,
+				List.of(skills.get(0).getSkillId(), skills.get(1).getSkillId()));
+
+		long totalCourses = courseRepository.count();
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+		mockMvc.perform(get("/api/courses/workspace").param("userId", user.getUserId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.roleName").value("Data Analyst"))
+				.andExpect(jsonPath("$.activeSkillGapsCount").value(2))
+				.andExpect(jsonPath("$.totalModules").isNumber())
+				.andExpect(jsonPath("$.totalAssessments").isNumber())
+				.andExpect(jsonPath("$.courses.length()").value((int) totalCourses))
+				.andExpect(jsonPath("$.courses[?(@.isRecommended == true)].courseId").isNotEmpty());
+
+		mockMvc.perform(get("/api/courses/workspace"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.activeSkillGapsCount").value(0))
+				.andExpect(jsonPath("$.courses.length()").value((int) totalCourses));
+	}
+
 }

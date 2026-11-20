@@ -81,9 +81,6 @@
       : (Array.isArray(cData.skillGaps) ? cData.skillGaps : []);
     const powTests = Array.isArray(cData.blindTests) ? cData.blindTests : [];
     const topPriorityGaps = Array.isArray(cData.topPriorityGaps) ? cData.topPriorityGaps : [];
-    const roadmap = Array.isArray(cData.roadmapPhases)
-      ? cData.roadmapPhases
-      : (Array.isArray(cData.roadmap) ? cData.roadmap : []);
     const projects = Array.isArray(cData.portfolioProjects) ? cData.portfolioProjects : [];
     const avgPct = Math.round(Number(cData.overallProgress ?? cData.averageProgress ?? 0));
     const isCurriculumCompleted = Boolean(cData.isCurriculumCompleted);
@@ -152,7 +149,7 @@
             </div>
           </section>
 
-          <section class="p-6 rounded-3xl bg-white border border-[#E8E2DA] space-y-4">
+          <section id="pow-arena" class="scroll-mt-24 p-6 rounded-3xl bg-white border border-[#E8E2DA] space-y-4">
             <div class="flex items-center justify-between">
               <div>
                 <h2 class="text-lg font-black text-[#2C2A27]">PoW Arena — Blind Tests</h2>
@@ -184,41 +181,49 @@
             </div>
           </section>
 
-          ${projects.length ? `
-            <section class="p-6 rounded-3xl bg-white border border-[#E8E2DA] space-y-3">
-              <div class="flex items-center justify-between gap-2">
-                <div>
-                  <h2 class="text-lg font-black text-[#2C2A27]">Target Portfolio Projects</h2>
-                  <p class="text-xs text-[#6B6560]">Klik proyek untuk membaca instruksi lengkap &amp; mengumpulkan tautan karya</p>
-                </div>
+          <section class="p-6 rounded-3xl bg-white border border-[#E8E2DA] space-y-4">
+            <div class="flex flex-wrap items-start sm:items-center justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-black text-[#2C2A27]">Target Portfolio Projects</h2>
+                <p class="text-xs text-[#6B6560]">Klik proyek untuk membaca instruksi lengkap &amp; mengumpulkan tautan karya</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
                 <span class="px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#E8E2DA] text-[11px] font-extrabold text-[#6B6560]">${projects.length} Proyek</span>
+                <button type="button" id="cr-open-audit-card" ${canRunAiAudit ? '' : 'disabled'} title="${esc(auditHint)}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold transition-colors ${canRunAiAudit ? 'bg-[#2C2A27] hover:bg-[#D97757] text-white shadow-sm cursor-pointer' : 'bg-[#E8E2DA] text-[#9A948D] cursor-not-allowed'}">
+                  ${canRunAiAudit ? 'Run AI Audit Portofolio' : '🔒 Run AI Audit Portofolio'}
+                </button>
               </div>
-              <div class="space-y-2.5">
-                ${projects.map((p) => {
-                  const meta = getProjectStatusMeta(p);
-                  return `
-                    <button type="button" data-open-project="${esc(p.projectId)}" class="w-full text-left p-4 rounded-2xl bg-[#FAF8F5] border border-[#E8E2DA] hover:border-[#D97757] hover:shadow-sm transition-all flex flex-col gap-2 cursor-pointer group">
-                      <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FDF0EB] text-[#D97757] max-w-full truncate">${esc(p.courseTitle || p.courseId)}</span>
-                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
-                      </div>
-                      <div>
-                        <p class="text-sm font-extrabold text-[#2C2A27] group-hover:text-[#D97757]">${esc(p.title)}</p>
-                        <p class="text-[11px] text-[#6B6560] mt-1 line-clamp-2">${esc(getProjectSummaryLine(p.expectedOutput))}</p>
-                      </div>
-                      ${p.externalUrl ? `<p class="text-[11px] font-mono text-[#5E7C6B] truncate">🔗 ${esc(p.externalUrl)}</p>` : ''}
-                      <div class="flex items-center justify-end pt-1">
-                        <span class="text-xs font-extrabold text-[#D97757]">${esc(meta.cta)}</span>
-                      </div>
-                    </button>
-                  `;
-                }).join('')}
-              </div>
-            </section>
-          ` : ''}
+            </div>
+
+            <div class="px-3.5 py-2.5 rounded-2xl border text-[11px] font-bold leading-relaxed ${canRunAiAudit ? 'bg-[#F0F3EF] border-[#8A9A86]/40 text-[#5A6D56]' : 'bg-[#FAF8F5] border-[#E8E2DA] text-[#6B6560]'}">
+              ${esc(auditHint)}
+            </div>
+
+            <div class="space-y-2.5">
+              ${projects.length ? projects.map((p) => {
+                const meta = getProjectStatusMeta(p);
+                return `
+                  <button type="button" data-open-project="${esc(p.projectId)}" class="w-full text-left p-4 rounded-2xl bg-[#FAF8F5] border border-[#E8E2DA] hover:border-[#D97757] hover:shadow-sm transition-all flex flex-col gap-2 cursor-pointer group">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FDF0EB] text-[#D97757] max-w-full truncate">${esc(p.courseTitle || p.courseId)}</span>
+                      <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
+                    </div>
+                    <div>
+                      <p class="text-sm font-extrabold text-[#2C2A27] group-hover:text-[#D97757]">${esc(p.title)}</p>
+                      <p class="text-[11px] text-[#6B6560] mt-1 line-clamp-2">${esc(getProjectSummaryLine(p.expectedOutput))}</p>
+                    </div>
+                    ${p.externalUrl ? `<p class="text-[11px] font-mono text-[#5E7C6B] truncate">🔗 ${esc(p.externalUrl)}</p>` : ''}
+                    <div class="flex items-center justify-end pt-1">
+                      <span class="text-xs font-extrabold text-[#D97757]">${esc(meta.cta)}</span>
+                    </div>
+                  </button>
+                `;
+              }).join('') : '<p class="text-xs text-[#6B6560]">Belum ada proyek portofolio untuk role ini.</p>'}
+            </div>
+          </section>
         </div>
 
-        <aside class="space-y-6">
+        <aside class="space-y-6 min-[900px]:sticky min-[900px]:top-6">
           <section class="p-6 rounded-3xl bg-white border border-[#E8E2DA] space-y-4">
             <h2 class="text-lg font-black text-[#2C2A27]">Skill Gap Analysis</h2>
             ${buildRadarSvg(skillGaps)}
@@ -242,25 +247,6 @@
                 `).join('')}
               </div>
             </div>
-          </section>
-
-          <section class="p-6 rounded-3xl bg-white border border-[#E8E2DA] space-y-4">
-            <h2 class="text-lg font-black text-[#2C2A27]">Reverse-Engineered Roadmap</h2>
-            <div class="space-y-3">
-              ${roadmap.map((step, idx) => `
-                <div class="flex gap-3 items-start p-3 rounded-2xl bg-[#FAF8F5] border border-[#E8E2DA]">
-                  <span class="w-6 h-6 rounded-full bg-[#D97757] text-white text-xs font-black flex items-center justify-center shrink-0">${idx + 1}</span>
-                  <div>
-                    <p class="text-[11px] font-extrabold text-[#8A9A86]">${esc(step.phase)}</p>
-                    <p class="text-xs font-bold text-[#2C2A27] mt-0.5">${esc(step.description)}</p>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-            <button type="button" id="cr-open-audit-card" ${canRunAiAudit ? '' : 'disabled'} title="${esc(auditHint)}" class="w-full py-3 rounded-2xl text-xs font-extrabold transition-colors ${canRunAiAudit ? 'bg-[#2C2A27] hover:bg-[#D97757] text-white cursor-pointer' : 'bg-[#E8E2DA] text-[#9A948D] cursor-not-allowed'}">
-              ${canRunAiAudit ? 'Run AI Audit Portofolio' : '🔒 Run AI Audit Portofolio'}
-            </button>
-            <p class="text-[11px] font-bold ${canRunAiAudit ? 'text-[#5A6D56]' : 'text-[#6B6560]'} text-center leading-relaxed">${esc(auditHint)}</p>
           </section>
         </aside>
       </div>
@@ -727,6 +713,9 @@
       state.error = err.message || 'Gagal memuat data karier dari server.';
     }
     render();
+    if (window.location.hash === '#pow-arena') {
+      document.getElementById('pow-arena')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   document.addEventListener('DOMContentLoaded', loadCareerData);

@@ -31,7 +31,7 @@ public class PageController {
         return "home";
     }
 
-    @GetMapping("/courses")
+    @GetMapping({"/courses", "/learn"})
     public String courses() {
         return "courses";
     }
@@ -46,13 +46,8 @@ public class PageController {
         return "course-detail";
     }
 
-    @GetMapping("/quiz")
+    @GetMapping({"/quiz", "/blind-test", "/studypod"})
     public String quiz() {
-        return "quiz";
-    }
-
-    @GetMapping("/blind-test")
-    public String blindTest() {
         return "quiz";
     }
 

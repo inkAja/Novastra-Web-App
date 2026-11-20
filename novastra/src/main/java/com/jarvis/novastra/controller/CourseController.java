@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -33,6 +34,11 @@ public class CourseController {
     @GetMapping
     public List<Course> getAllCourses() {
         return courseService.getAllCourses();
+    }
+
+    @GetMapping("/workspace")
+    public Map<String, Object> getLearnWorkspace(@RequestParam(required = false) String userId) {
+        return courseService.getLearnWorkspace(userId);
     }
 
     @GetMapping("/{id}")
