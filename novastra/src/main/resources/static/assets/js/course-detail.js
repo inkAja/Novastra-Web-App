@@ -119,20 +119,6 @@
     return /\.(mp4|webm|ogg)(\?.*)?$/i.test(String(url || '').trim());
   }
 
-  function getMobileChapterMarkers() {
-    const markers = state.microTasks.map((mt, idx) => ({
-      pct: mt.triggerPct,
-      done: Boolean(mt.isCompleted),
-      label: `Checkpoint ${idx + 1} (${formatTimeShort(mt.timestampSeconds)})`
-    }));
-    [35, 68].forEach((stop) => {
-      if (markers.length < 3 && !markers.some((m) => Math.abs(m.pct - stop) < 8)) {
-        markers.push({ pct: stop, done: state.videoProgress >= stop, label: `Bab (${stop}%)` });
-      }
-    });
-    return markers.sort((a, b) => a.pct - b.pct).slice(0, 3);
-  }
-
   function seekToProgress(targetPct) {
     const clamped = Math.max(0, Math.min(100, Math.round(targetPct)));
     const blocker = findBlockingTask(clamped);
@@ -694,7 +680,6 @@
   function renderMobileView(activeMod, hasModule, isCompleted, durationSec, pendingTasks) {
     const activeIdx = Math.max(0, state.courseModules.findIndex((m) => m.moduleId === state.currentModuleId));
     const currentSec = (state.videoProgress / 100) * durationSec;
-    const markers = getMobileChapterMarkers();
     const instructorOrRole = state.course.instructorName || state.course.instructor || window.getSession?.()?.roleName || 'Mentor Novastra';
     const mobileTab = state.rightTab === 'microtasks' ? 'microtasks' : 'upnext';
 
@@ -726,9 +711,6 @@
           <div id="cdm-scrub-track" class="cdm-scrub-track" role="slider" aria-label="Progres Video" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(state.videoProgress)}">
             <div class="cdm-scrub-rail">
               <div id="cdm-scrub-fill" class="cdm-scrub-fill" style="width:${state.videoProgress}%"></div>
-              ${markers.map((m) => `
-                <button type="button" data-chapter-pct="${m.pct}" class="cdm-chapter-dot ${m.done ? 'is-done' : ''}" style="left:${m.pct}%" title="${esc(m.label)}" aria-label="${esc(m.label)}"></button>
-              `).join('')}
               <span id="cdm-scrub-thumb" class="cdm-scrub-thumb" style="left:${state.videoProgress}%"></span>
             </div>
           </div>
@@ -1050,13 +1032,6 @@
     };
     document.getElementById('cd-progress-track')?.addEventListener('click', handleScrubClick);
     document.getElementById('cdm-scrub-track')?.addEventListener('click', handleScrubClick);
-
-    document.querySelectorAll('[data-chapter-pct]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        seekToProgress(Number(btn.dataset.chapterPct));
-      });
-    });
 
     document.querySelectorAll('[data-speed]').forEach((btn) => {
       btn.addEventListener('click', () => {

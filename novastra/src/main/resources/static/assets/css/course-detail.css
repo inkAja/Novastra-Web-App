@@ -230,26 +230,6 @@
     z-index: 4;
   }
 
-  .cdm-chapter-dot {
-    position: absolute;
-    top: 50%;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 0;
-    padding: 0;
-    background: #FACC15;
-    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.32);
-    transform: translate(-50%, -50%);
-    cursor: pointer;
-    z-index: 3;
-  }
-
-  .cdm-chapter-dot.is-done {
-    background: #86EFAC;
-    box-shadow: 0 0 0 4px rgba(134, 239, 172, 0.28);
-  }
-
   .cdm-time-row {
     display: flex;
     align-items: center;
