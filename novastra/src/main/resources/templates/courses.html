@@ -7,15 +7,41 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/assets/css/custom.css" />
-  <link rel="stylesheet" href="/assets/css/learn.css?v=1" />
+  <link rel="stylesheet" href="/assets/css/learn.css?v=2" />
 </head>
-<body data-page="courses" class="min-h-screen bg-[#FDFBF7] text-[#2C2A27]">
+<body data-page="courses" class="ln-page min-h-screen bg-[#FDFBF7] text-[#2C2A27]">
+  <header class="ln-mobile-header">
+    <a href="/home" class="ln-brand-link" aria-label="Novastra Home">
+      <span class="ln-brand-circle" aria-hidden="true">N</span>
+      <span class="ln-brand-name">Novastra</span>
+    </a>
+  </header>
+
   <main id="main-content" class="p-4 md:p-8 max-w-7xl mx-auto space-y-6"></main>
+
+  <nav class="ln-bottom-nav" aria-label="Navigasi Utama Mobile">
+    <a href="/home" class="ln-nav-item">
+      <span class="ln-nav-icon-box"><i data-lucide="home" class="w-5 h-5"></i></span>
+      <span class="ln-nav-label">Home</span>
+    </a>
+    <a href="/learn" class="ln-nav-item is-active" aria-current="page">
+      <span class="ln-nav-icon-box"><i data-lucide="book-open" class="w-5 h-5"></i></span>
+      <span class="ln-nav-label">Learn</span>
+    </a>
+    <a href="/career" class="ln-nav-item">
+      <span class="ln-nav-icon-box"><i data-lucide="briefcase" class="w-5 h-5"></i></span>
+      <span class="ln-nav-label">Career</span>
+    </a>
+    <a href="/profile" class="ln-nav-item">
+      <span class="ln-nav-icon-box"><i data-lucide="user" class="w-5 h-5"></i></span>
+      <span class="ln-nav-label">Profile</span>
+    </a>
+  </nav>
 
   <script src="/assets/js/data.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script src="/assets/js/storage.js"></script>
   <script src="/assets/js/components.js?v=2"></script>
-  <script src="/assets/js/courses.js?v=2"></script>
+  <script src="/assets/js/courses.js?v=3"></script>
 </body>
 </html>

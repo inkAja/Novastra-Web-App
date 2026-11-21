@@ -7,14 +7,41 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/assets/css/custom.css" />
+  <link rel="stylesheet" href="/assets/css/home.css?v=1" />
 </head>
-<body data-page="home" class="min-h-screen bg-[#FDFBF7] text-[#2C2A27]">
+<body data-page="home" class="hm-page min-h-screen bg-[#FDFBF7] text-[#2C2A27]">
+  <header class="hm-mobile-header">
+    <a href="/home" class="hm-brand-link" aria-label="Novastra Home">
+      <span class="hm-brand-circle" aria-hidden="true">N</span>
+      <span class="hm-brand-name">Novastra</span>
+    </a>
+  </header>
+
   <main id="main-content" class="p-4 md:p-8 max-w-7xl mx-auto space-y-8"></main>
+
+  <nav class="hm-bottom-nav" aria-label="Navigasi Utama Mobile">
+    <a href="/home" class="hm-nav-item is-active" aria-current="page">
+      <span class="hm-nav-icon-box"><i data-lucide="home" class="w-5 h-5"></i></span>
+      <span class="hm-nav-label">Home</span>
+    </a>
+    <a href="/learn" class="hm-nav-item">
+      <span class="hm-nav-icon-box"><i data-lucide="book-open" class="w-5 h-5"></i></span>
+      <span class="hm-nav-label">Learn</span>
+    </a>
+    <a href="/career" class="hm-nav-item">
+      <span class="hm-nav-icon-box"><i data-lucide="briefcase" class="w-5 h-5"></i></span>
+      <span class="hm-nav-label">Career</span>
+    </a>
+    <a href="/profile" class="hm-nav-item">
+      <span class="hm-nav-icon-box"><i data-lucide="user" class="w-5 h-5"></i></span>
+      <span class="hm-nav-label">Profile</span>
+    </a>
+  </nav>
 
   <script src="/assets/js/data.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script src="/assets/js/storage.js"></script>
   <script src="/assets/js/components.js?v=2"></script>
-  <script src="/assets/js/home.js"></script>
+  <script src="/assets/js/home.js?v=2"></script>
 </body>
 </html>

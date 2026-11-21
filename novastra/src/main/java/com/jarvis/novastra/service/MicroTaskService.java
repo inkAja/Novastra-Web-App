@@ -35,16 +35,19 @@ public class MicroTaskService {
     private final MicroTaskResultRepository microTaskResultRepository;
     private final CourseModuleRepository courseModuleRepository;
     private final UserRepository userRepository;
+    private final CareerService careerService;
 
     public MicroTaskService(
             MicroTaskRepository microTaskRepository,
             MicroTaskResultRepository microTaskResultRepository,
             CourseModuleRepository courseModuleRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            CareerService careerService) {
         this.microTaskRepository = microTaskRepository;
         this.microTaskResultRepository = microTaskResultRepository;
         this.courseModuleRepository = courseModuleRepository;
         this.userRepository = userRepository;
+        this.careerService = careerService;
     }
 
     public List<Map<String, Object>> getMicroTasksByModule(String moduleId, String userId) {
@@ -90,6 +93,13 @@ public class MicroTaskService {
 
     @Transactional
     public Map<String, Object> submitMicroTask(String taskId, String userId, String answer, BigDecimal submittedScore) {
+        Map<String, Object> response = saveMicroTaskResult(taskId, userId, answer, submittedScore);
+        careerService.recalculateUserSkillGaps(String.valueOf(response.get("userId")));
+        return response;
+    }
+
+    private Map<String, Object> saveMicroTaskResult(
+            String taskId, String userId, String answer, BigDecimal submittedScore) {
         if (taskId == null || taskId.isBlank() || userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId dan taskId wajib diisi.");
         }
@@ -171,10 +181,11 @@ public class MicroTaskService {
                 throw new NoSuchElementException("Micro-task tidak ditemukan.");
             }
             if (text.length() >= MIN_BLIND_TEST_ANSWER_LEN) {
-                submitMicroTask(tid, uid, text, FULL_SCORE);
+                saveMicroTaskResult(tid, uid, text, FULL_SCORE);
                 savedTaskIds.add(tid);
             }
         }
+        careerService.recalculateUserSkillGaps(uid);
 
         int totalTasksCount = uniqueAnswers.size();
         int completedTasksCount = savedTaskIds.size();

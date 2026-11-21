@@ -1,0 +1,608 @@
+.cr-mobile-header,
+.cr-mobile-view,
+.cr-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  body.cr-page {
+    background: #FAF6F3;
+    color: #18181B;
+    min-height: 100vh;
+    font-family: 'Nunito', 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  body.cr-page #nv-mobile-header,
+  body.cr-page #nv-bottom-nav,
+  body.cr-page #nv-sidebar,
+  body.cr-page #nv-topbar,
+  body.cr-page .cr-desktop-view {
+    display: none;
+  }
+
+  body.cr-page #main-content {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 16px 20px 96px;
+    box-sizing: border-box;
+  }
+
+  /* Sticky Mobile Brand Header */
+  body.cr-page .cr-mobile-header {
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    height: 58px;
+    padding: 0 20px;
+    background: #FAF6F3;
+    border-bottom: 1px solid #EAE3DD;
+  }
+
+  body.cr-page .cr-brand-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+
+  body.cr-page .cr-brand-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1.5px solid #D9B7A9;
+    background: #FFFFFF;
+    color: #CE6C4E;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  body.cr-page .cr-brand-name {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: #2C2A27;
+  }
+
+  body.cr-page .cr-mobile-view {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  body.cr-page .cr-page-title {
+    margin: 0;
+    font-size: 26px;
+    line-height: 1.2;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: #18181B;
+  }
+
+  body.cr-page .cr-page-sub {
+    margin: 4px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6B6560;
+  }
+
+  body.cr-page .cr-kicker {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #78716C;
+  }
+
+  /* Skill Gap Analysis Radar Card */
+  body.cr-page .cr-radar-card {
+    background: #FFFFFF;
+    border: 1px solid #E6DFD9;
+    border-radius: 24px;
+    padding: 20px 16px;
+    box-shadow: 0 8px 24px rgba(31, 29, 27, 0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  body.cr-page .cr-radar-wrap {
+    width: 100%;
+    max-width: 320px;
+    margin: 8px auto 10px;
+  }
+
+  body.cr-page .cr-radar-legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #52525B;
+  }
+
+  body.cr-page .cr-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  body.cr-page .cr-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  body.cr-page .cr-legend-dot--skill {
+    background: #CE6C4E;
+  }
+
+  body.cr-page .cr-legend-dot--demand {
+    background: #7A8273;
+  }
+
+  /* Your Curriculum */
+  body.cr-page .cr-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  body.cr-page .cr-curr-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  body.cr-page .cr-curr-role {
+    margin: 3px 0 0;
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 900;
+    color: #18181B;
+  }
+
+  body.cr-page .cr-pct-box {
+    min-width: 68px;
+    padding: 8px 12px;
+    border-radius: 16px;
+    background: #FCECE6;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  body.cr-page .cr-pct-val {
+    display: block;
+    font-size: 18px;
+    line-height: 1.1;
+    font-weight: 900;
+    color: #CE6C4E;
+  }
+
+  body.cr-page .cr-pct-lbl {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #CE6C4E;
+  }
+
+  body.cr-page .cr-curr-bar-track {
+    width: 100%;
+    height: 7px;
+    border-radius: 999px;
+    background: #E8E1DA;
+    overflow: hidden;
+  }
+
+  body.cr-page .cr-curr-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: #7A8273;
+    transition: width 0.35s ease;
+  }
+
+  body.cr-page .cr-curr-stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 700;
+    color: #6B6560;
+    margin-top: -6px;
+  }
+
+  body.cr-page .cr-curr-left {
+    color: #CE6C4E;
+    font-weight: 800;
+  }
+
+  body.cr-page .cr-course-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  body.cr-page .cr-course-card {
+    width: 100%;
+    text-align: left;
+    background: #FFFFFF;
+    border: 1px solid #E6DFD9;
+    border-radius: 20px;
+    overflow: hidden;
+    display: flex;
+    align-items: stretch;
+    box-shadow: 0 6px 18px rgba(31, 29, 27, 0.04);
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+  }
+
+  body.cr-page .cr-course-thumb {
+    width: 84px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #34404A 0%, #576773 100%);
+  }
+
+  body.cr-page .cr-course-card.is-done .cr-course-thumb {
+    background: linear-gradient(135deg, #626E64 0%, #869487 100%);
+  }
+
+  body.cr-page .cr-thumb-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #FFFFFF;
+  }
+
+  body.cr-page .cr-thumb-icon--play {
+    background: #CE6C4E;
+  }
+
+  body.cr-page .cr-thumb-icon--done {
+    background: rgba(255, 255, 255, 0.28);
+    border: 1.5px solid #FFFFFF;
+  }
+
+  body.cr-page .cr-course-body {
+    flex: 1;
+    min-width: 0;
+    padding: 13px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  body.cr-page .cr-course-meta-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  body.cr-page .cr-course-cat {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #CE6C4E;
+  }
+
+  body.cr-page .cr-course-state {
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #FCECE6;
+    color: #CE6C4E;
+    font-size: 9.5px;
+    font-weight: 900;
+  }
+
+  body.cr-page .cr-course-title {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.3;
+    font-weight: 800;
+    color: #18181B;
+  }
+
+  body.cr-page .cr-course-card.is-done .cr-course-title {
+    color: #6B6560;
+  }
+
+  body.cr-page .cr-course-foot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+  }
+
+  body.cr-page .cr-mini-track {
+    flex: 1;
+    height: 5px;
+    border-radius: 999px;
+    background: #EDE7E0;
+    overflow: hidden;
+  }
+
+  body.cr-page .cr-mini-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: #CE6C4E;
+  }
+
+  body.cr-page .cr-course-pct {
+    font-size: 11px;
+    font-weight: 800;
+    color: #6B6560;
+    flex-shrink: 0;
+  }
+
+  body.cr-page .cr-show-more {
+    width: 100%;
+    border: 0;
+    border-radius: 14px;
+    padding: 14px;
+    background: #F4EAE4;
+    color: #CE6C4E;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  /* Section Header Row */
+  body.cr-page .cr-head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  /* PoW Arena Cards */
+  body.cr-page .cr-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  body.cr-page .cr-pow-card {
+    background: #FFFFFF;
+    border: 1px solid #E6DFD9;
+    border-radius: 22px;
+    padding: 18px;
+    box-shadow: 0 8px 24px rgba(31, 29, 27, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  body.cr-page .cr-pow-card.is-passed {
+    border-color: #9BB098;
+    background: #FAFDF9;
+  }
+
+  body.cr-page .cr-pow-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  body.cr-page .cr-pow-title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.3;
+    font-weight: 800;
+    color: #18181B;
+  }
+
+  body.cr-page .cr-level-pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #F4EFE9;
+    color: #52525B;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  body.cr-page .cr-level-pill.is-passed {
+    background: #7A8273;
+    color: #FFFFFF;
+  }
+
+  body.cr-page .cr-skill-tag {
+    align-self: flex-start;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #FCECE6;
+    color: #CE6C4E;
+    font-size: 10.5px;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  body.cr-page .cr-pow-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 6px;
+    border-top: 1px solid #F2ECE6;
+  }
+
+  body.cr-page .cr-dur-txt {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #6B6560;
+  }
+
+  body.cr-page .cr-start-btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 9px 15px;
+    background: #CE6C4E;
+    color: #FFFFFF;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 800;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  body.cr-page .cr-pow-card.is-passed .cr-start-btn {
+    background: #7A8273;
+  }
+
+  /* Target Portfolio Projects */
+  body.cr-page .cr-count-pill {
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: #FFFFFF;
+    border: 1px solid #E6DFD9;
+    font-size: 11px;
+    font-weight: 800;
+    color: #6B6560;
+  }
+
+  body.cr-page .cr-project-card {
+    width: 100%;
+    text-align: left;
+    background: #FFFFFF;
+    border: 1px solid #E6DFD9;
+    border-radius: 22px;
+    padding: 18px;
+    box-shadow: 0 8px 24px rgba(31, 29, 27, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  body.cr-page .cr-project-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  body.cr-page .cr-project-course {
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #FCECE6;
+    color: #CE6C4E;
+    font-size: 10.5px;
+    font-weight: 800;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.cr-page .cr-project-title {
+    margin: 0;
+    font-size: 15.5px;
+    font-weight: 800;
+    color: #18181B;
+  }
+
+  body.cr-page .cr-project-desc {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #6B6560;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  body.cr-page .cr-project-url {
+    margin: 0;
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    color: #5E7C6B;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  body.cr-page .cr-project-cta {
+    align-self: flex-end;
+    font-size: 12.5px;
+    font-weight: 800;
+    color: #CE6C4E;
+  }
+
+  /* Fixed Mobile Bottom Nav */
+  body.cr-page .cr-bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    background: #FFFFFF;
+    border-top: 1px solid #EAE3DD;
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.cr-page .cr-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    text-decoration: none;
+    color: #78716C;
+  }
+
+  body.cr-page .cr-nav-icon-box {
+    width: 44px;
+    height: 30px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  body.cr-page .cr-nav-label {
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  body.cr-page .cr-nav-item.is-active {
+    color: #CE6C4E;
+  }
+
+  body.cr-page .cr-nav-item.is-active .cr-nav-icon-box {
+    background: #FCECE6;
+    color: #CE6C4E;
+  }
+
+  body.cr-page .cr-nav-item.is-active .cr-nav-label {
+    font-weight: 800;
+  }
+}

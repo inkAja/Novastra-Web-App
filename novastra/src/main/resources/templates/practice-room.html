@@ -8,17 +8,26 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&amp;family=Nunito:wght@600;700;800;900&amp;display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/assets/css/practice-room.css?v=3" />
+  <link rel="stylesheet" href="/assets/css/practice-room.css?v=4" />
 </head>
 <body data-page="practice-room" class="pr-page">
+  <div class="pr-mobile-brand-bar">
+    <a href="/home" class="pr-brand-link" aria-label="Novastra Home">
+      <span class="pr-brand-circle" aria-hidden="true">N</span>
+      <span class="pr-brand-name">Novastra</span>
+    </a>
+  </div>
+
   <div class="pr-shell">
     <div id="pr-error-banner" class="pr-error-banner is-hidden" role="alert"></div>
 
     <header class="pr-topbar">
       <div class="pr-topbar-left">
         <button type="button" id="pr-leave-btn" class="pr-leave-btn">
-          <i data-lucide="x" class="pr-icon-sm"></i>
-          <span>Leave Room</span>
+          <i data-lucide="x" class="pr-icon-sm pr-leave-desktop-icon"></i>
+          <span class="pr-leave-desktop">Leave Room</span>
+          <i data-lucide="chevron-left" class="pr-icon-sm pr-leave-mobile-icon"></i>
+          <span class="pr-leave-mobile">Back</span>
         </button>
       </div>
 
@@ -59,6 +68,7 @@
               <button type="button" id="pr-user-mute-pill" class="pr-mute-pill">
                 <span id="pr-user-mute-text">Speaking / Tap to mute</span>
               </button>
+              <button type="button" id="pr-user-mobile-status" class="pr-mobile-status">Speaking</button>
             </div>
 
             <div id="pr-user-caption" class="pr-caption-box pr-caption-box--user" aria-live="polite">
@@ -96,6 +106,7 @@
                 </div>
                 <span class="pr-speaking-label">Speaking...</span>
               </div>
+              <span id="pr-peer-mobile-status" class="pr-mobile-status is-waiting">Waiting...</span>
             </div>
 
             <div id="pr-peer-caption" class="pr-caption-box pr-caption-box--peer" aria-live="polite">
@@ -108,12 +119,16 @@
         <div class="pr-dock-card" role="toolbar" aria-label="Kontrol Audio dan Angkat Tangan">
           <div class="pr-dock-controls">
             <button type="button" id="pr-btn-mute" class="pr-ctrl-btn" aria-pressed="false">
-              <i data-lucide="mic" class="pr-icon-sm"></i>
-              <span>Mute</span>
+              <span class="pr-ctrl-icon-circle">
+                <i data-lucide="mic" class="pr-icon-sm"></i>
+              </span>
+              <span class="pr-ctrl-label">Mute</span>
             </button>
             <button type="button" id="pr-btn-hand" class="pr-ctrl-btn" aria-pressed="false">
-              <i data-lucide="hand" class="pr-icon-sm"></i>
-              <span>Raise Hand</span>
+              <span class="pr-ctrl-icon-circle">
+                <i data-lucide="hand" class="pr-icon-sm"></i>
+              </span>
+              <span class="pr-ctrl-label">Raise Hand</span>
             </button>
           </div>
         </div>
@@ -128,46 +143,73 @@
               </span>
               <h2 class="pr-sidebar-title">Current Task</h2>
             </div>
-            <span class="pr-duration-pill">3 Mins</span>
+            <span id="pr-duration-pill" class="pr-duration-pill">10 Mins</span>
           </div>
 
           <div class="pr-task-list">
             <div class="pr-task-card pr-task-card--terra">
               <span class="pr-task-badge pr-task-badge--terra">A</span>
-              <p class="pr-task-text">
-                <strong>Peer A (You):</strong>
-                <span id="pr-task-a-text">Jelaskan arsitektur layanan dan trade-off skalabilitas secara ringkas tanpa slide.</span>
-              </p>
+              <div class="pr-task-body">
+                <p class="pr-task-text">
+                  <strong>Peer A (You):</strong>
+                  <span id="pr-task-a-text">Jelaskan arsitektur layanan dan trade-off skalabilitas secara ringkas tanpa slide.</span>
+                </p>
+                <span id="pr-task-a-status" class="pr-task-status">Menunggu...</span>
+              </div>
             </div>
 
             <div class="pr-task-card pr-task-card--sage">
               <span class="pr-task-badge pr-task-badge--sage">B</span>
-              <p class="pr-task-text">
-                <strong id="pr-task-b-owner">Peer B (Partner):</strong>
-                <span id="pr-task-b-text">Berikan 2 umpan balik konstruktif — 1 kekuatan utama dan 1 area perbaikan teknis.</span>
-              </p>
+              <div class="pr-task-body">
+                <p class="pr-task-text">
+                  <strong id="pr-task-b-owner">Peer B (Partner):</strong>
+                  <span id="pr-task-b-text">Berikan 2 umpan balik konstruktif — 1 kekuatan utama dan 1 area perbaikan teknis.</span>
+                </p>
+                <span id="pr-task-b-status" class="pr-task-status">Menunggu...</span>
+              </div>
             </div>
           </div>
 
           <div class="pr-notes-section">
-            <p class="pr-notes-heading">SHARED LINKS &amp; NOTES</p>
+            <p class="pr-notes-heading pr-notes-heading-desktop">SHARED LINKS &amp; NOTES</p>
+            <p class="pr-notes-heading pr-notes-heading-mobile">LIVE COLLABORATION &amp; NOTES</p>
             <div id="pr-notes-list" class="pr-notes-list"></div>
           </div>
         </div>
 
         <form id="pr-note-form" class="pr-share-form">
-          <i data-lucide="link-2" class="pr-share-icon"></i>
+          <i data-lucide="link-2" class="pr-share-icon pr-share-icon-desktop"></i>
+          <i data-lucide="paperclip" class="pr-share-icon pr-share-icon-mobile"></i>
           <input id="pr-note-input" type="text" maxlength="240" autocomplete="off" placeholder="Share Figma / Doc link..." class="pr-share-input" />
-          <button type="submit" id="pr-share-btn" class="pr-share-btn">
+          <button type="submit" id="pr-share-btn" class="pr-share-btn" aria-label="Kirim catatan">
             <i data-lucide="send" class="pr-icon-xs"></i>
-            <span>Share</span>
+            <span class="pr-share-btn-label">Share</span>
           </button>
         </form>
       </aside>
     </main>
   </div>
 
+  <nav class="pr-bottom-nav" aria-label="Navigasi Utama Mobile">
+    <a href="/home" class="pr-nav-item">
+      <span class="pr-nav-icon-box"><i data-lucide="home" class="pr-nav-icon"></i></span>
+      <span class="pr-nav-label">Home</span>
+    </a>
+    <a href="/learn" class="pr-nav-item is-active" aria-current="page">
+      <span class="pr-nav-icon-box"><i data-lucide="book-open" class="pr-nav-icon"></i></span>
+      <span class="pr-nav-label">Learn</span>
+    </a>
+    <a href="/career" class="pr-nav-item">
+      <span class="pr-nav-icon-box"><i data-lucide="briefcase" class="pr-nav-icon"></i></span>
+      <span class="pr-nav-label">Career</span>
+    </a>
+    <a href="/profile" class="pr-nav-item">
+      <span class="pr-nav-icon-box"><i data-lucide="user" class="pr-nav-icon"></i></span>
+      <span class="pr-nav-label">Profile</span>
+    </a>
+  </nav>
+
   <script src="/assets/js/auth.js"></script>
-  <script src="/assets/js/practice-room.js?v=4"></script>
+  <script src="/assets/js/practice-room.js?v=5"></script>
 </body>
 </html>

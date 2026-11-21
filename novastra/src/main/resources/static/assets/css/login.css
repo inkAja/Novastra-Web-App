@@ -1,0 +1,252 @@
+.lg-mobile-brand,
+.lg-mobile-heading,
+.lg-mobile-options,
+.lg-mobile-footer {
+  display: none;
+}
+
+.lg-pass-wrap {
+  position: relative;
+}
+
+.lg-pass-wrap #auth-password {
+  padding-right: 44px;
+}
+
+.lg-pass-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  padding: 4px;
+  color: #78716C;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.lg-pass-toggle:hover {
+  color: #CE6C4E;
+}
+
+.lg-info-toast {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #FAF3E7;
+  border: 1px solid #E9D6B6;
+  color: #6B5125;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+@media (max-width: 768px) {
+  body.lg-page {
+    background: #FBF6F3;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 32px 20px;
+    font-family: 'Nunito', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #18181B;
+  }
+
+  body.lg-page .lg-desktop-only {
+    display: none;
+  }
+
+  body.lg-page .lg-mobile-brand {
+    display: block;
+    width: 100%;
+    max-width: 390px;
+    text-align: center;
+  }
+
+  body.lg-page .lg-mobile-brand h1 {
+    margin: 0 0 6px;
+    font-size: 32px;
+    line-height: 1.15;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #111111;
+  }
+
+  body.lg-page .lg-mobile-brand p {
+    margin: 0 0 28px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #52525B;
+  }
+
+  body.lg-page .lg-card {
+    width: 100%;
+    max-width: 390px;
+    background: #F2ECE7;
+    border: 1px solid rgba(234, 227, 221, 0.8);
+    border-radius: 28px;
+    padding: 32px 24px;
+    box-shadow: 0 14px 36px rgba(31, 29, 27, 0.08);
+  }
+
+  body.lg-page .lg-mobile-heading {
+    display: block;
+    margin: 0 0 24px;
+    text-align: left;
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 800;
+    color: #18181B;
+  }
+
+  body.lg-page .lg-field-label {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #18181B;
+    margin-bottom: 8px;
+  }
+
+  body.lg-page .lg-input {
+    width: 100%;
+    background: #F9F8F7;
+    border: 1px solid #EAE3DD;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #18181B;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  body.lg-page .lg-pass-wrap #auth-password {
+    padding-right: 46px;
+  }
+
+  body.lg-page .lg-input::placeholder {
+    color: #78716C;
+    font-weight: 500;
+  }
+
+  body.lg-page .lg-input:focus {
+    outline: none;
+    border-color: #CE6C4E;
+    box-shadow: 0 0 0 3px rgba(206, 108, 78, 0.14);
+  }
+
+  body.lg-page .lg-mobile-options {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  body.lg-page .lg-mobile-options.is-register {
+    display: none;
+  }
+
+  body.lg-page .lg-remember-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #52525B;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  body.lg-page .lg-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    border: 1.5px solid #78716C;
+    border-radius: 6px;
+    background: #F9F8F7;
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+    transition: background-color 0.14s ease, border-color 0.14s ease;
+  }
+
+  body.lg-page .lg-checkbox:checked {
+    background: #CE6C4E;
+    border-color: #CE6C4E;
+  }
+
+  body.lg-page .lg-checkbox:checked::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    border: solid #FFFFFF;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-bottom: 2px;
+  }
+
+  body.lg-page .lg-forgot-link {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #CE6C4E;
+    cursor: pointer;
+  }
+
+  body.lg-page .lg-forgot-link:hover {
+    color: #B85B3F;
+  }
+
+  body.lg-page #auth-submit {
+    width: 100%;
+    margin-top: 24px;
+    padding: 14px;
+    border: 0;
+    border-radius: 10px;
+    background: #CE6C4E;
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+  }
+
+  body.lg-page #auth-submit:hover:not(:disabled) {
+    background: #B85B3F;
+  }
+
+  body.lg-page .lg-mobile-footer {
+    display: block;
+    margin: 24px 0 0;
+    text-align: center;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #52525B;
+  }
+
+  body.lg-page .lg-switch-link {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    margin-left: 3px;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #CE6C4E;
+    cursor: pointer;
+  }
+
+  body.lg-page .lg-switch-link:hover {
+    color: #B85B3F;
+  }
+}

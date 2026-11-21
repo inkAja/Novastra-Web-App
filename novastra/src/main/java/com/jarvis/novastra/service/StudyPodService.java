@@ -78,6 +78,8 @@ public class StudyPodService {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("userId", uid);
+        response.put("fullName", user.getFullName() != null ? user.getFullName() : "");
+        response.put("experienceLevel", user.getExperienceLevel() != null ? user.getExperienceLevel() : 0);
         response.put("roleId", roleId);
         response.put("roleName", roleName);
         response.put("topics", topics);

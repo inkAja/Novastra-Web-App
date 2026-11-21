@@ -7,10 +7,16 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/assets/css/custom.css" />
+  <link rel="stylesheet" href="/assets/css/login.css?v=1" />
 </head>
-<body class="min-h-screen bg-[#FDFBF7] text-[#2C2A27] flex items-center justify-center p-4">
-  <div class="w-full max-w-md bg-white border border-[#E8E2DA] rounded-3xl p-6 md:p-8 shadow-sm animate-fade-slide-in">
-    <div class="flex items-center justify-between mb-6">
+<body class="lg-page min-h-screen bg-[#FDFBF7] text-[#2C2A27] flex items-center justify-center p-4">
+  <header class="lg-mobile-brand">
+    <h1>Novastra</h1>
+    <p>Reach Your New Heights</p>
+  </header>
+
+  <div class="lg-card w-full max-w-md bg-white border border-[#E8E2DA] rounded-3xl p-6 md:p-8 shadow-sm animate-fade-slide-in">
+    <div class="lg-desktop-only flex items-center justify-between mb-6">
       <a href="/login" class="flex items-center gap-2.5">
         <div class="w-10 h-10 rounded-xl bg-[#D97757] text-white flex items-center justify-center font-black text-lg">N</div>
         <div>
@@ -20,44 +26,66 @@
       </a>
     </div>
 
-    <div class="grid grid-cols-2 p-1 rounded-2xl bg-[#F5F0EA] border border-[#E8E2DA] mb-5">
+    <div class="lg-desktop-only grid grid-cols-2 p-1 rounded-2xl bg-[#F5F0EA] border border-[#E8E2DA] mb-5">
       <button type="button" id="tab-login" class="py-2 rounded-xl text-xs font-extrabold bg-white text-[#2C2A27] shadow-sm cursor-pointer">Masuk</button>
       <button type="button" id="tab-register" class="py-2 rounded-xl text-xs font-extrabold text-[#6B6560] cursor-pointer">Daftar Akun</button>
     </div>
 
+    <h2 id="lg-card-title" class="lg-mobile-heading">Masuk ke Akun</h2>
+
     <form id="auth-form" class="space-y-4" novalidate>
       <div id="register-name-wrap" class="hidden">
-        <label for="auth-name" class="block text-xs font-bold text-[#6B6560] mb-1.5">Nama Lengkap</label>
-        <input id="auth-name" type="text" placeholder="Hanif Mishbah" class="w-full px-4 py-2.5 rounded-xl bg-[#FAF8F5] border border-[#E8E2DA] text-sm focus:outline-none focus:border-[#D97757]" />
+        <label for="auth-name" class="lg-field-label block text-xs font-bold text-[#6B6560] mb-1.5">Nama Lengkap</label>
+        <input id="auth-name" type="text" placeholder="Hanif Mishbah" class="lg-input w-full px-4 py-2.5 rounded-xl bg-[#FAF8F5] border border-[#E8E2DA] text-sm focus:outline-none focus:border-[#D97757]" />
       </div>
       <div>
-        <label for="auth-email" class="block text-xs font-bold text-[#6B6560] mb-1.5">Email</label>
-        <input id="auth-email" type="email" placeholder="nama@novastra.id" class="w-full px-4 py-2.5 rounded-xl bg-[#FAF8F5] border border-[#E8E2DA] text-sm focus:outline-none focus:border-[#D97757]" />
+        <label for="auth-email" class="lg-field-label block text-xs font-bold text-[#6B6560] mb-1.5">Email</label>
+        <input id="auth-email" type="email" autocomplete="email" placeholder="nama@email.com" class="lg-input w-full px-4 py-2.5 rounded-xl bg-[#FAF8F5] border border-[#E8E2DA] text-sm focus:outline-none focus:border-[#D97757]" />
       </div>
       <div>
-        <label for="auth-password" class="block text-xs font-bold text-[#6B6560] mb-1.5">Password</label>
-        <input id="auth-password" type="password" placeholder="Minimal 6 karakter" class="w-full px-4 py-2.5 rounded-xl bg-[#FAF8F5] border border-[#E8E2DA] text-sm focus:outline-none focus:border-[#D97757]" />
+        <label for="auth-password" class="lg-field-label block text-xs font-bold text-[#6B6560] mb-1.5">Password</label>
+        <div class="lg-pass-wrap">
+          <input id="auth-password" type="password" autocomplete="current-password" placeholder="Masukkan password" class="lg-input w-full px-4 py-2.5 rounded-xl bg-[#FAF8F5] border border-[#E8E2DA] text-sm focus:outline-none focus:border-[#D97757]" />
+          <button type="button" id="lg-toggle-password" class="lg-pass-toggle" aria-label="Tampilkan password" aria-pressed="false">
+            <i data-lucide="eye" class="w-[18px] h-[18px]"></i>
+          </button>
+        </div>
       </div>
 
+      <div id="lg-mobile-options" class="lg-mobile-options">
+        <label class="lg-remember-label">
+          <input type="checkbox" id="lg-remember" class="lg-checkbox" />
+          <span>Ingat saya</span>
+        </label>
+        <button type="button" id="lg-forgot-btn" class="lg-forgot-link">Lupa password?</button>
+      </div>
+
+      <p id="lg-info-toast" class="lg-info-toast hidden" role="status"></p>
       <p id="auth-error" class="hidden text-xs font-bold text-[#A65D57] bg-[#F8ECEB] border border-[#A65D57]/30 px-3 py-2 rounded-xl"></p>
 
       <button type="submit" id="auth-submit" class="w-full py-3 rounded-xl bg-[#D97757] hover:opacity-95 text-white text-sm font-extrabold transition-opacity cursor-pointer">Masuk ke Workspace</button>
     </form>
 
-    <div class="my-4 flex items-center gap-3">
+    <div class="lg-desktop-only my-4 flex items-center gap-3">
       <div class="flex-1 h-px bg-[#E8E2DA]"></div>
       <span class="text-[11px] font-bold uppercase tracking-wider text-[#A89F98]">atau</span>
       <div class="flex-1 h-px bg-[#E8E2DA]"></div>
     </div>
 
-    <button type="button" id="auth-guest-btn" class="w-full py-2.5 px-4 rounded-xl bg-[#FAF8F5] hover:bg-[#F5F0EA] border border-[#E8E2DA] text-xs font-extrabold text-[#2C2A27] transition-colors flex items-center justify-center gap-2 cursor-pointer">
+    <button type="button" id="auth-guest-btn" class="lg-desktop-only w-full py-2.5 px-4 rounded-xl bg-[#FAF8F5] hover:bg-[#F5F0EA] border border-[#E8E2DA] text-xs font-extrabold text-[#2C2A27] transition-colors flex items-center justify-center gap-2 cursor-pointer">
       <i data-lucide="compass" class="w-4 h-4 text-[#D97757]"></i>
       <span>Lanjutkan sebagai Guest</span>
     </button>
+
+    <p class="lg-mobile-footer">
+      <span id="lg-footer-prompt">Belum punya akun?</span>
+      <button type="button" id="lg-switch-mode" class="lg-switch-link">Daftar sekarang</button>
+    </p>
   </div>
 
   <script src="/assets/js/data.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/login.js?v=1"></script>
 </body>
 </html>

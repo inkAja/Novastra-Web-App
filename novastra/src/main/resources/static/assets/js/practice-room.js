@@ -268,14 +268,20 @@
     const muteBtn = document.getElementById('pr-btn-mute');
     const userMutePill = document.getElementById('pr-user-mute-pill');
     const userMuteText = document.getElementById('pr-user-mute-text');
+    const userMobileStatus = document.getElementById('pr-user-mobile-status');
     if (muteBtn) {
       muteBtn.classList.toggle('is-muted-active', state.muted);
       muteBtn.setAttribute('aria-pressed', String(state.muted));
-      const label = muteBtn.querySelector('span');
+      const label = muteBtn.querySelector('.pr-ctrl-label');
       if (label) label.textContent = state.muted ? 'Unmute' : 'Mute';
     }
     if (userMutePill) userMutePill.classList.toggle('is-muted', state.muted);
     if (userMuteText) userMuteText.textContent = state.muted ? 'Muted / Tap to unmute' : 'Speaking / Tap to mute';
+    if (userMobileStatus) {
+      userMobileStatus.textContent = state.handRaised ? 'Hand Raised ✋' : (state.muted ? 'Muted 🔇' : 'Speaking');
+      userMobileStatus.classList.toggle('is-hand', state.handRaised);
+      userMobileStatus.classList.toggle('is-muted', !state.handRaised && state.muted);
+    }
 
     const handBtn = document.getElementById('pr-btn-hand');
     const handBadge = document.getElementById('pr-hand-badge');
@@ -297,6 +303,7 @@
     const waitingPill = document.getElementById('pr-peer-waiting-pill');
     const mutedPill = document.getElementById('pr-peer-muted-pill');
     const speakingRow = document.getElementById('pr-peer-speaking-row');
+    const peerMobileStatus = document.getElementById('pr-peer-mobile-status');
     const taskBOwner = document.getElementById('pr-task-b-owner');
     const captionSpeaker = document.getElementById('pr-peer-caption-speaker');
 
@@ -319,6 +326,15 @@
     if (waitingPill) waitingPill.classList.toggle('is-hidden', hasPartner);
     if (mutedPill) mutedPill.classList.toggle('is-hidden', !hasPartner || !isPartnerMuted);
     if (speakingRow) speakingRow.classList.toggle('is-hidden', !hasPartner || isPartnerMuted);
+    if (peerMobileStatus) {
+      peerMobileStatus.textContent = !hasPartner
+        ? 'Waiting...'
+        : (isPartnerHand ? 'Hand Raised ✋' : (isPartnerMuted ? 'Muted 🔇' : 'Connected'));
+      peerMobileStatus.classList.toggle('is-waiting', !hasPartner);
+      peerMobileStatus.classList.toggle('is-hand', hasPartner && isPartnerHand);
+      peerMobileStatus.classList.toggle('is-muted', hasPartner && !isPartnerHand && isPartnerMuted);
+      peerMobileStatus.classList.toggle('is-connected', hasPartner && !isPartnerHand && !isPartnerMuted);
+    }
     if (taskBOwner) taskBOwner.textContent = hasPartner ? `Peer B (${getFirstName(partner.fullName)}):` : 'Peer B (Partner):';
     if (captionSpeaker) captionSpeaker.textContent = hasPartner ? `${getFirstName(partner.fullName)}:` : 'Partner:';
     syncCaptionsUI();
@@ -366,14 +382,36 @@
     const cfg = state.topicConfig || DEFAULT_TASK;
     const rubric = cfg.initialRubric || cfg.initialNote || DEFAULT_TASK.initialNote;
     const list = Array.isArray(serverNotes) ? serverNotes : [];
+    const myName = String(state.userName || '').trim().toLowerCase();
     return [
-      { senderName: 'Panduan Topik', timestamp: 'Rubrik', content: rubric },
-      ...list.map((note) => ({
-        senderName: note.senderName || 'Peer',
-        timestamp: note.timestamp || '',
-        content: note.content || ''
-      }))
+      { senderName: 'Panduan Topik', timestamp: 'Rubrik', content: rubric, kind: 'rubric' },
+      ...list.map((note) => {
+        const sender = String(note.senderName || 'Peer').trim();
+        const lower = sender.toLowerCase();
+        const isSelf = lower.startsWith('you (') || (myName && lower === myName);
+        return {
+          senderName: sender || 'Peer',
+          timestamp: note.timestamp || '',
+          content: note.content || '',
+          kind: isSelf ? 'self' : 'peer'
+        };
+      })
     ];
+  }
+
+  function syncTaskStatusUI() {
+    const taskAStatus = document.getElementById('pr-task-a-status');
+    const taskBStatus = document.getElementById('pr-task-b-status');
+    const selfDone = state.notes.some((n) => n.kind === 'self');
+    const peerDone = state.notes.some((n) => n.kind === 'peer');
+    if (taskAStatus) {
+      taskAStatus.textContent = selfDone ? '✓ Selesai' : 'Menunggu...';
+      taskAStatus.classList.toggle('is-done', selfDone);
+    }
+    if (taskBStatus) {
+      taskBStatus.textContent = peerDone ? '✓ Selesai' : 'Menunggu...';
+      taskBStatus.classList.toggle('is-done', peerDone);
+    }
   }
 
   function renderNotes(shouldScrollToBottom) {
@@ -385,8 +423,9 @@
       const bodyHtml = isUrl
         ? `<a href="${esc(text)}" target="_blank" rel="noopener noreferrer" class="pr-note-link">${esc(text)}</a>`
         : esc(text);
+      const kindClass = `pr-note-item--${esc(note.kind || 'peer')}`;
       return `
-        <article class="pr-note-item">
+        <article class="pr-note-item ${kindClass}">
           <div class="pr-note-meta">
             <span class="pr-note-author">${esc(note.senderName)}</span>
             <span class="pr-note-time">${esc(note.timestamp)}</span>
@@ -395,6 +434,7 @@
         </article>
       `;
     }).join('');
+    syncTaskStatusUI();
     if (shouldScrollToBottom) {
       listEl.scrollTop = listEl.scrollHeight;
     }
@@ -570,9 +610,11 @@
     }
 
     const leaveBtn = document.getElementById('pr-leave-btn');
-    const leaveText = leaveBtn?.querySelector('span');
+    const leaveDesktop = leaveBtn?.querySelector('.pr-leave-desktop');
+    const leaveMobile = leaveBtn?.querySelector('.pr-leave-mobile');
     if (leaveBtn) leaveBtn.disabled = true;
-    if (leaveText) leaveText.textContent = state.roomFull ? 'Kembali...' : 'Menyimpan...';
+    if (leaveDesktop) leaveDesktop.textContent = state.roomFull ? 'Kembali...' : 'Menyimpan...';
+    if (leaveMobile) leaveMobile.textContent = '...';
     showError('');
 
     if (!state.roomFull && state.userId && !state.isGuest) {
@@ -584,7 +626,8 @@
       } catch (err) {
         state.leaving = false;
         if (leaveBtn) leaveBtn.disabled = false;
-        if (leaveText) leaveText.textContent = 'Leave Room';
+        if (leaveDesktop) leaveDesktop.textContent = 'Leave Room';
+        if (leaveMobile) leaveMobile.textContent = 'Back';
         showError(`Gagal menyimpan sesi latihan ke server: ${err.message}. Silakan coba klik Leave Room lagi.`);
         return;
       }
@@ -679,6 +722,18 @@
     state.userName = session.fullName || 'Learner';
     state.userRole = session.roleName || 'Peserta Jalur Karier';
 
+    const durationPill = document.getElementById('pr-duration-pill');
+    if (durationPill) durationPill.textContent = `${durationMin} Mins`;
+
+    const noteInput = document.getElementById('pr-note-input');
+    const mobileQuery = window.matchMedia?.('(max-width: 768px)');
+    const syncNotePlaceholder = () => {
+      if (!noteInput) return;
+      noteInput.placeholder = mobileQuery?.matches ? 'Tuliskan solusi / review...' : 'Share Figma / Doc link...';
+    };
+    syncNotePlaceholder();
+    mobileQuery?.addEventListener?.('change', syncNotePlaceholder);
+
     applyTopicDetails(state.topicConfig);
 
     syncUserIdentityUI();
@@ -692,6 +747,7 @@
     const toggleMute = () => performRoomAction('TOGGLE_MUTE');
     document.getElementById('pr-btn-mute')?.addEventListener('click', toggleMute);
     document.getElementById('pr-user-mute-pill')?.addEventListener('click', toggleMute);
+    document.getElementById('pr-user-mobile-status')?.addEventListener('click', toggleMute);
     document.getElementById('pr-btn-hand')?.addEventListener('click', () => performRoomAction('TOGGLE_HAND'));
 
     document.getElementById('pr-note-form')?.addEventListener('submit', async (e) => {
@@ -706,7 +762,8 @@
         state.notes.push({
           senderName: `You (${getFirstName(state.userName)})`,
           timestamp: formatMmSs(elapsed),
-          content: text
+          content: text,
+          kind: 'self'
         });
         if (input) input.value = '';
         renderNotes(true);

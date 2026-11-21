@@ -1,0 +1,367 @@
+.hm-mobile-header,
+.hm-mobile-view,
+.hm-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  body.hm-page {
+    background: #FAF6F3;
+    color: #18181B;
+    min-height: 100vh;
+    font-family: 'Nunito', 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  body.hm-page #nv-mobile-header,
+  body.hm-page #nv-bottom-nav,
+  body.hm-page #nv-sidebar,
+  body.hm-page #nv-topbar,
+  body.hm-page .hm-desktop-view {
+    display: none;
+  }
+
+  body.hm-page #main-content {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 16px 20px 92px;
+    box-sizing: border-box;
+  }
+
+  /* Sticky Top Brand Header */
+  body.hm-page .hm-mobile-header {
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    height: 58px;
+    padding: 0 20px;
+    background: #FAF6F3;
+    border-bottom: 1px solid #EAE3DD;
+  }
+
+  body.hm-page .hm-brand-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+
+  body.hm-page .hm-brand-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1.5px solid #D9B7A9;
+    background: #FFFFFF;
+    color: #CE6C4E;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  body.hm-page .hm-brand-name {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: #2C2A27;
+  }
+
+  /* Main Vertical Stack */
+  body.hm-page .hm-mobile-view {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  body.hm-page .hm-greeting {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6B6560;
+  }
+
+  body.hm-page .hm-page-title {
+    margin: 4px 0 0;
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: #18181B;
+  }
+
+  body.hm-page .hm-kicker {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #78716C;
+  }
+
+  /* Hero Card — Market Readiness */
+  body.hm-page .hm-hero-card {
+    background: linear-gradient(180deg, #F5E9E1 0%, #FBF8F5 100%);
+    border: 1px solid #E4DDD6;
+    border-radius: 24px;
+    padding: 24px 20px;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(31, 29, 27, 0.04);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  body.hm-page .hm-donut-wrap {
+    margin: 18px 0 16px;
+  }
+
+  body.hm-page .hm-hero-status {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.3;
+    font-weight: 900;
+    color: #18181B;
+  }
+
+  body.hm-page .hm-hero-sub {
+    margin: 6px 0 16px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #6B6560;
+  }
+
+  body.hm-page .hm-hero-bar-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: #DFD8D0;
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+
+  body.hm-page .hm-hero-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: #7A8273;
+    transition: width 0.35s ease;
+  }
+
+  body.hm-page .hm-hero-cta {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 18px;
+    border-radius: 16px;
+    background: #CE6C4E;
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 6px 16px rgba(206, 108, 78, 0.24);
+    transition: background-color 0.15s ease;
+  }
+
+  body.hm-page .hm-hero-cta:hover {
+    background: #B85B3F;
+  }
+
+  /* Quick Resume Section */
+  body.hm-page .hm-section-block {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  body.hm-page .hm-section-head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  body.hm-page .hm-quick-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  body.hm-page .hm-quick-card {
+    background: #FBF8F5;
+    border: 1px solid #E6DFD9;
+    border-radius: 20px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 10px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+  }
+
+  body.hm-page .hm-quick-tag {
+    display: inline-block;
+    align-self: flex-start;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  body.hm-page .hm-quick-tag--micro {
+    background: #FBE9E2;
+    color: #CE6C4E;
+  }
+
+  body.hm-page .hm-quick-tag--peer {
+    background: #EAECE7;
+    color: #5D6557;
+  }
+
+  body.hm-page .hm-quick-type {
+    margin: 6px 0 0;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #78716C;
+  }
+
+  body.hm-page .hm-quick-title {
+    margin: 3px 0 0;
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: 900;
+    color: #18181B;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  body.hm-page .hm-quick-sub {
+    margin: 4px 0 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #78716C;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  body.hm-page .hm-micro-bar-track {
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background: #EAE3DD;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  body.hm-page .hm-micro-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: #CE6C4E;
+  }
+
+  body.hm-page .hm-quick-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #78716C;
+  }
+
+  body.hm-page .hm-quick-dur {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  body.hm-page .hm-quick-pct {
+    color: #CE6C4E;
+    font-weight: 800;
+  }
+
+  /* Market Signals */
+  body.hm-page .hm-signals-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  body.hm-page .hm-signal-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 13px;
+    border-radius: 999px;
+    background: #FFFFFF;
+    border: 1px solid #E6DFD9;
+    font-size: 13px;
+    font-weight: 700;
+    color: #2C2A27;
+  }
+
+  body.hm-page .hm-signal-pill.is-priority {
+    border-color: #EBC8BA;
+    background: #FFFBF9;
+  }
+
+  /* Fixed Mobile Bottom Nav */
+  body.hm-page .hm-bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    background: #FFFFFF;
+    border-top: 1px solid #EAE3DD;
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.hm-page .hm-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    text-decoration: none;
+    color: #78716C;
+  }
+
+  body.hm-page .hm-nav-icon-box {
+    width: 44px;
+    height: 30px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  body.hm-page .hm-nav-label {
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  body.hm-page .hm-nav-item.is-active {
+    color: #CE6C4E;
+  }
+
+  body.hm-page .hm-nav-item.is-active .hm-nav-icon-box {
+    background: #FCECE6;
+    color: #CE6C4E;
+  }
+
+  body.hm-page .hm-nav-item.is-active .hm-nav-label {
+    font-weight: 800;
+  }
+}

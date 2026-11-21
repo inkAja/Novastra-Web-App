@@ -13,6 +13,7 @@
     testError: '',
     submittingTest: false,
     careerDirty: false,
+    mobileShowAllCourses: false,
     activeProjectId: null,
     projectUrl: '',
     projectError: '',
@@ -54,6 +55,239 @@
     `;
   }
 
+  function formatShortRadarLabel(name) {
+    const clean = String(name || '').replace(/[&/]+/g, ' ').trim();
+    const parts = clean.split(/\s+/).filter(Boolean);
+    if (!parts.length) return '';
+    const candidate = parts.length > 1 && `${parts[0]} ${parts[1]}`.length <= 13
+      ? `${parts[0]} ${parts[1]}`
+      : parts[0];
+    return candidate.length > 13 ? `${candidate.slice(0, 12)}…` : candidate;
+  }
+
+  function buildMobileRadarSvg(axes) {
+    if (!axes.length) {
+      return '<p class="text-xs text-[#6B6560] text-center py-6">Belum ada data skill gap untuk role ini.</p>';
+    }
+    const cx = 160, cy = 122, maxR = 66, labelR = 82;
+    const n = axes.length;
+    const pt = (idx, radius) => {
+      const angle = (-Math.PI / 2) + (idx * 2 * Math.PI) / n;
+      return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle), angle];
+    };
+    const polyPts = (selector) => axes.map((a, i) => {
+      const pct = Math.max(0, Math.min(100, Number(selector(a) ?? 0)));
+      const [x, y] = pt(i, (pct / 100) * maxR);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    const rings = [33, 66, 100].map((lvl) => {
+      const r = (lvl / 100) * maxR;
+      const pts = axes.map((_, i) => {
+        const [x, y] = pt(i, r);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+      return `<polygon points="${pts}" fill="none" stroke="#E8E1DA" stroke-width="1"></polygon>`;
+    }).join('');
+
+    const spokes = axes.map((_, i) => {
+      const [x, y] = pt(i, maxR);
+      return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#E8E1DA" stroke-width="1"></line>`;
+    }).join('');
+
+    const demandPoly = `<polygon points="${polyPts((a) => a.targetLevel ?? 80)}" fill="rgba(122, 130, 115, 0.22)" stroke="#7A8273" stroke-width="2" stroke-dasharray="4 3"></polygon>`;
+    const skillPoly = `<polygon points="${polyPts((a) => a.currentLevel ?? 0)}" fill="rgba(206, 108, 78, 0.25)" stroke="#CE6C4E" stroke-width="2.5"></polygon>`;
+
+    const labels = axes.map((a, i) => {
+      const [x, y, angle] = pt(i, labelR);
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const anchor = cos > 0.25 ? 'start' : (cos < -0.25 ? 'end' : 'middle');
+      const dy = sin > 0.5 ? 10 : (sin < -0.5 ? -4 : 4);
+      const label = formatShortRadarLabel(a.skillName);
+      return `<text x="${x.toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}" font-size="10.5" font-weight="700" fill="#52525B">${esc(label)}</text>`;
+    }).join('');
+
+    return `
+      <div class="cr-radar-wrap">
+        <svg viewBox="0 0 320 245" class="w-full h-auto" aria-label="Skill Gap Analysis Radar">
+          ${rings}${spokes}${demandPoly}${skillPoly}${labels}
+        </svg>
+      </div>
+    `;
+  }
+
+  function extractCourseLevel(title) {
+    const match = /^\[(Beginner|Intermediate|Advanced)\]\s*(.+)$/i.exec(String(title || '').trim());
+    if (match) {
+      const level = match[1][0].toUpperCase() + match[1].slice(1).toLowerCase();
+      return { level, cleanTitle: match[2].trim() };
+    }
+    return { level: 'Core', cleanTitle: String(title || '').trim() };
+  }
+
+  function inferBlindTestSkillTag(test) {
+    const title = String(test?.title || '').toLowerCase();
+    return /pitch|communication|storytelling|research|usability|ux/.test(title) ? 'SOFT SKILL' : 'HARD SKILL';
+  }
+
+  function renderMobileCurriculum(cData, curriculumList, avgPct) {
+    const completedCourses = curriculumList.filter((c) => Math.round(Number(c.progressPercentage ?? c.progress ?? 0)) >= 100).length;
+    const totalCourses = curriculumList.length;
+    const remainingCourses = Math.max(0, totalCourses - completedCourses);
+    const hasMore = totalCourses > 4;
+    const displayed = (hasMore && !state.mobileShowAllCourses) ? curriculumList.slice(0, 4) : curriculumList;
+
+    return `
+      <section class="cr-section" aria-label="Your Curriculum">
+        <div class="cr-curr-head">
+          <div>
+            <p class="cr-kicker">YOUR CURRICULUM</p>
+            <h2 class="cr-curr-role">${esc(cData.roleName || 'Career Track')}</h2>
+          </div>
+          <div class="cr-pct-box">
+            <span class="cr-pct-val">${avgPct}%</span>
+            <span class="cr-pct-lbl">done</span>
+          </div>
+        </div>
+
+        <div class="cr-curr-bar-track" aria-hidden="true">
+          <div class="cr-curr-bar-fill" style="width:${avgPct}%"></div>
+        </div>
+
+        <div class="cr-curr-stats">
+          <span>${completedCourses} of ${totalCourses} courses complete</span>
+          <span class="cr-curr-left">${remainingCourses} left</span>
+        </div>
+
+        <div class="cr-course-list">
+          ${displayed.length ? displayed.map((c) => {
+            const pct = Math.round(Number(c.progressPercentage ?? c.progress ?? 0));
+            const isDone = pct >= 100;
+            const isEnrolled = Boolean(c.isEnrolled) || pct > 0;
+            const { cleanTitle } = extractCourseLevel(c.title);
+            return `
+              <button type="button" data-curriculum-course="${esc(c.courseId)}" data-enrolled="${isEnrolled}" ${state.enrollingCourseId ? 'disabled' : ''} class="cr-course-card ${isDone ? 'is-done' : ''}">
+                <div class="cr-course-thumb">
+                  <span class="cr-thumb-icon ${isDone ? 'cr-thumb-icon--done' : 'cr-thumb-icon--play'}">
+                    <i data-lucide="${isDone ? 'check' : 'play'}" class="w-4 h-4"></i>
+                  </span>
+                </div>
+                <div class="cr-course-body">
+                  <div class="cr-course-meta-top">
+                    <span class="cr-course-cat">${esc(c.typeCourse || 'COURSE')}</span>
+                    ${(!isDone && isEnrolled) ? '<span class="cr-course-state">IN PROGRESS</span>' : ''}
+                  </div>
+                  <h3 class="cr-course-title">${esc(cleanTitle || c.title)}</h3>
+                  <div class="cr-course-foot">
+                    <div class="cr-mini-track">
+                      <div class="cr-mini-fill" style="width:${pct}%"></div>
+                    </div>
+                    <span class="cr-course-pct">${pct}%</span>
+                  </div>
+                </div>
+              </button>
+            `;
+          }).join('') : '<p class="text-xs text-[#6B6560]">Belum ada course untuk role ini.</p>'}
+        </div>
+
+        ${hasMore ? `
+          <button type="button" id="cr-mobile-show-more" class="cr-show-more">
+            ${state.mobileShowAllCourses ? 'Show Less' : `Show More (${totalCourses - 4})`}
+          </button>
+        ` : ''}
+      </section>
+    `;
+  }
+
+  function renderMobileView(cData, curriculumList, skillGaps, topPriorityGaps, powTests, projects, avgPct) {
+    return `
+      <div class="cr-mobile-view">
+        ${state.actionError ? `<div class="p-3.5 rounded-2xl bg-[#FDF0EB] border border-[#F2A68D] text-xs font-bold text-[#A64B2A]">${esc(state.actionError)}</div>` : ''}
+
+        <header>
+          <h1 class="cr-page-title">Career Path</h1>
+          <p class="cr-page-sub">Personalized path for ${esc(cData.roleName || 'Belum dipilih')}</p>
+        </header>
+
+        <section class="cr-radar-card" aria-label="Skill Gap Analysis">
+          <p class="cr-kicker">SKILL GAP ANALYSIS</p>
+          ${buildMobileRadarSvg(skillGaps)}
+          <div class="cr-radar-legend">
+            <span class="cr-legend-item"><span class="cr-legend-dot cr-legend-dot--skill"></span>Your Skill</span>
+            <span class="cr-legend-item"><span class="cr-legend-dot cr-legend-dot--demand"></span>Market Demand</span>
+          </div>
+          ${skillGaps.length > 0 && topPriorityGaps.length === 0 ? `
+            <span class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F0F3EF] border border-[#8A9A86]/50 text-xs font-extrabold text-[#5E7C6B]">✓ Semua Skill Gap Jalur Karir Terpenuhi</span>
+          ` : ''}
+        </section>
+
+        ${renderMobileCurriculum(cData, curriculumList, avgPct)}
+
+        <section id="cr-mobile-pow-arena" class="cr-section scroll-mt-20" aria-label="PoW Arena Blind Tests">
+          <div class="cr-head-row">
+            <p class="cr-kicker">POW ARENA — BLIND TESTS</p>
+            <i data-lucide="zap" class="w-4 h-4 text-[#CE6C4E]"></i>
+          </div>
+
+          <div class="cr-stack">
+            ${powTests.length ? powTests.map((t) => {
+              const isPassed = Boolean(t.isPassed);
+              const bestScore = Math.round(Number(t.bestScore ?? 0));
+              const rawTitle = String(t.title || '').replace(/^Blind Test:\s*/i, '');
+              const { level, cleanTitle } = extractCourseLevel(rawTitle);
+              const badgeText = isPassed ? `✓ ${bestScore}%` : level;
+              const skillTag = inferBlindTestSkillTag(t);
+              return `
+                <article class="cr-pow-card ${isPassed ? 'is-passed' : ''}">
+                  <div class="cr-pow-top">
+                    <h3 class="cr-pow-title">${esc(cleanTitle || t.title)}</h3>
+                    <span class="cr-level-pill ${isPassed ? 'is-passed' : ''}">${esc(badgeText)}</span>
+                  </div>
+                  <span class="cr-skill-tag">${skillTag}</span>
+                  <div class="cr-pow-foot">
+                    <span class="cr-dur-txt">
+                      <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                      <span>${esc(t.durationMin || 20)} min</span>
+                    </span>
+                    <button type="button" data-start-test="${esc(t.testId)}" class="cr-start-btn">
+                      ${isPassed ? 'Review Challenge →' : 'Start Challenge →'}
+                    </button>
+                  </div>
+                </article>
+              `;
+            }).join('') : '<p class="text-xs text-[#6B6560]">Belum ada tantangan Blind Test untuk role ini.</p>'}
+          </div>
+        </section>
+
+        <section class="cr-section" aria-label="Target Portfolio Projects">
+          <div class="cr-head-row">
+            <p class="cr-kicker">TARGET PORTFOLIO PROJECTS</p>
+            <span class="cr-count-pill">${projects.length} Proyek</span>
+          </div>
+
+          <div class="cr-stack">
+            ${projects.length ? projects.map((p) => {
+              const meta = getProjectStatusMeta(p);
+              return `
+                <button type="button" data-open-project="${esc(p.projectId)}" class="cr-project-card">
+                  <div class="cr-project-badges">
+                    <span class="cr-project-course">${esc(p.courseTitle || p.courseId)}</span>
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
+                  </div>
+                  <h3 class="cr-project-title">${esc(p.title)}</h3>
+                  <p class="cr-project-desc">${esc(getProjectSummaryLine(p.expectedOutput))}</p>
+                  ${p.externalUrl ? `<p class="cr-project-url">🔗 ${esc(p.externalUrl)}</p>` : ''}
+                  <span class="cr-project-cta">${esc(meta.cta)}</span>
+                </button>
+              `;
+            }).join('') : '<p class="text-xs text-[#6B6560]">Belum ada proyek portofolio untuk role ini.</p>'}
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
   function render() {
     const main = document.getElementById('main-content');
     if (!main) return;
@@ -83,29 +317,17 @@
     const topPriorityGaps = Array.isArray(cData.topPriorityGaps) ? cData.topPriorityGaps : [];
     const projects = Array.isArray(cData.portfolioProjects) ? cData.portfolioProjects : [];
     const avgPct = Math.round(Number(cData.overallProgress ?? cData.averageProgress ?? 0));
-    const isCurriculumCompleted = Boolean(cData.isCurriculumCompleted);
-    const isAllPowPassed = Boolean(cData.isAllPowPassed);
-    const canRunAiAudit = Boolean(cData.canRunAiAudit);
-    const auditHint = canRunAiAudit
-      ? '✓ Syarat terpenuhi! Siap menjalankan AI Audit Portofolio.'
-      : isCurriculumCompleted
-        ? '🔒 Kurikulum selesai! Luluskan seluruh Blind Test di PoW Arena untuk membuka AI Audit.'
-        : isAllPowPassed
-          ? '🔒 Semua Blind Test lulus! Selesaikan sisa modul kurikulum hingga 100% untuk membuka AI Audit.'
-          : '🔒 Selesaikan 100% Kurikulum & seluruh Blind Test PoW untuk membuka AI Audit.';
 
     main.innerHTML = `
-      ${state.actionError ? `<div class="p-4 rounded-2xl bg-[#FDF0EB] border border-[#F2A68D] text-xs font-bold text-[#A64B2A]">${esc(state.actionError)}</div>` : ''}
+      <div class="cr-desktop-view space-y-6">
+        ${state.actionError ? `<div class="p-4 rounded-2xl bg-[#FDF0EB] border border-[#F2A68D] text-xs font-bold text-[#A64B2A]">${esc(state.actionError)}</div>` : ''}
 
-      <section class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 class="text-2xl md:text-3xl font-black text-[#2C2A27]">Career Roadmap &amp; PoW Arena</h1>
-          <p class="text-sm text-[#6B6560] mt-1">Target Role: <span class="font-bold text-[#D97757]">${esc(cData.roleName || 'Belum dipilih')}</span></p>
-        </div>
-        <button type="button" id="cr-open-audit" ${canRunAiAudit ? '' : 'disabled'} title="${esc(auditHint)}" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-extrabold transition-colors ${canRunAiAudit ? 'bg-[#D97757] hover:opacity-95 text-white shadow-sm cursor-pointer' : 'bg-[#E8E2DA] text-[#9A948D] cursor-not-allowed'}">
-          <i data-lucide="scan-line" class="w-4 h-4"></i> ${canRunAiAudit ? 'Run AI Audit' : '🔒 Run AI Audit'}
-        </button>
-      </section>
+        <section class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-black text-[#2C2A27]">Career Roadmap &amp; PoW Arena</h1>
+            <p class="text-sm text-[#6B6560] mt-1">Target Role: <span class="font-bold text-[#D97757]">${esc(cData.roleName || 'Belum dipilih')}</span></p>
+          </div>
+        </section>
 
       <div class="grid grid-cols-1 min-[900px]:grid-cols-[62fr_38fr] gap-6 items-start">
         <div class="space-y-6">
@@ -187,16 +409,7 @@
                 <h2 class="text-lg font-black text-[#2C2A27]">Target Portfolio Projects</h2>
                 <p class="text-xs text-[#6B6560]">Klik proyek untuk membaca instruksi lengkap &amp; mengumpulkan tautan karya</p>
               </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#E8E2DA] text-[11px] font-extrabold text-[#6B6560]">${projects.length} Proyek</span>
-                <button type="button" id="cr-open-audit-card" ${canRunAiAudit ? '' : 'disabled'} title="${esc(auditHint)}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold transition-colors ${canRunAiAudit ? 'bg-[#2C2A27] hover:bg-[#D97757] text-white shadow-sm cursor-pointer' : 'bg-[#E8E2DA] text-[#9A948D] cursor-not-allowed'}">
-                  ${canRunAiAudit ? 'Run AI Audit Portofolio' : '🔒 Run AI Audit Portofolio'}
-                </button>
-              </div>
-            </div>
-
-            <div class="px-3.5 py-2.5 rounded-2xl border text-[11px] font-bold leading-relaxed ${canRunAiAudit ? 'bg-[#F0F3EF] border-[#8A9A86]/40 text-[#5A6D56]' : 'bg-[#FAF8F5] border-[#E8E2DA] text-[#6B6560]'}">
-              ${esc(auditHint)}
+              <span class="px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#E8E2DA] text-[11px] font-extrabold text-[#6B6560] shrink-0">${projects.length} Proyek</span>
             </div>
 
             <div class="space-y-2.5">
@@ -242,17 +455,22 @@
             <div class="pt-3 border-t border-[#E8E2DA]">
               <p class="text-[11px] font-extrabold uppercase tracking-wider text-[#A89F98] mb-2">Top Priority Gaps</p>
               <div class="flex flex-wrap gap-2">
-                ${topPriorityGaps.map((g) => `
+                ${topPriorityGaps.length ? topPriorityGaps.map((g) => `
                   <span class="px-3 py-1 rounded-full bg-[#FDF0EB] border border-[#F2A68D]/60 text-xs font-extrabold text-[#D97757]">${esc(g)}</span>
-                `).join('')}
+                `).join('') : skillGaps.length ? `
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F0F3EF] border border-[#8A9A86]/50 text-xs font-extrabold text-[#5E7C6B]">✓ Semua Skill Gap Jalur Karir Terpenuhi</span>
+                ` : '<span class="text-xs text-[#6B6560]">Belum ada data skill gap.</span>'}
               </div>
             </div>
           </section>
         </aside>
       </div>
+      </div>
+
+      ${renderMobileView(cData, curriculumList, skillGaps, topPriorityGaps, powTests, projects, avgPct)}
 
       ${state.activeTest ? renderBlindTestModal() : ''}
-      ${state.activeProjectId && projects.length ? renderProjectModal(projects, canRunAiAudit, auditHint) : ''}
+      ${state.activeProjectId && projects.length ? renderProjectModal(projects) : ''}
       ${state.toast ? `
         <div class="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-[#2C2A27] text-white text-xs font-bold shadow-lg flex items-center gap-2 animate-slide-up">
           <span class="w-2 h-2 rounded-full bg-[#8A9A86]"></span>
@@ -261,7 +479,7 @@
       ` : ''}
     `;
 
-    bindEvents(powTests, projects, canRunAiAudit);
+    bindEvents(powTests, projects);
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -313,7 +531,7 @@
     const score = Number(project?.score ?? 0);
     if (raw === 'APPROVED' || raw === 'PASSED' || raw === 'LULUS') {
       return {
-        label: score > 0 ? `✓ Lulus Audit (${score})` : '✓ Lulus Audit',
+        label: score > 0 ? `✓ Lulus Verifikasi (${score})` : '✓ Lulus Verifikasi',
         cls: 'bg-[#8A9A86] text-white',
         cta: 'Lihat Detail & Hasil →'
       };
@@ -394,10 +612,17 @@
     render();
   }
 
-  function renderProjectModal(projects, canRunAiAudit, auditHint) {
+  function renderProjectModal(projects) {
     const proj = projects.find((p) => p.projectId === state.activeProjectId) || projects[0];
     if (!proj) return '';
     const meta = getProjectStatusMeta(proj);
+    const rawNote = String(proj.feedbackNotes || '').trim();
+    const hasSpecificNote = Boolean(rawNote) && !/menunggu proses ai audit/i.test(rawNote);
+    const normStatus = String(proj.status || 'NOT_SUBMITTED').trim().toUpperCase();
+    const isSubmitted = Boolean(proj.externalUrl) || ['SUBMITTED', 'PENDING', 'APPROVED', 'PASSED', 'LULUS'].includes(normStatus);
+    const reviewNote = hasSpecificNote
+      ? rawNote
+      : (isSubmitted ? 'Tautan karya telah berhasil disimpan.' : 'Belum ada catatan review.');
 
     return `
       <div id="pj-backdrop" class="fixed inset-0 z-50 bg-[#2C2A27]/55 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -405,7 +630,6 @@
           <div class="flex items-start justify-between gap-3 pb-4 border-b border-[#E8E2DA]">
             <div class="space-y-2 min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#FDF0EB] text-[#D97757]">${esc(proj.courseTitle || proj.courseId)}</span>
                 <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
               </div>
               <h2 class="text-xl font-black text-[#2C2A27]">${esc(proj.title)}</h2>
@@ -413,39 +637,20 @@
             <button type="button" id="pj-close" aria-label="Tutup" class="p-1.5 rounded-lg text-[#6B6560] hover:bg-[#F5F0EA] cursor-pointer shrink-0"><i data-lucide="x" class="w-5 h-5"></i></button>
           </div>
 
-          ${projects.length > 1 ? `
-            <div class="space-y-1.5">
-              <label for="pj-select" class="block text-[11px] font-extrabold uppercase tracking-wider text-[#A89F98]">Pilih Proyek Portofolio Jalur Karier</label>
-              <select id="pj-select" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E8E2DA] text-xs font-bold text-[#2C2A27] focus:outline-none focus:border-[#D97757]">
-                ${projects.map((p) => `
-                  <option value="${esc(p.projectId)}" ${p.projectId === proj.projectId ? 'selected' : ''}>${esc(p.title)} (${esc(getProjectStatusMeta(p).label)})</option>
-                `).join('')}
-              </select>
-            </div>
-          ` : ''}
-
           <div class="p-4 rounded-2xl bg-white border border-[#E8E2DA] space-y-2.5">
             <p class="text-[11px] font-extrabold uppercase tracking-wider text-[#8A9A86]">Instruksi &amp; Ekspektasi Hasil</p>
             ${formatExpectedOutput(proj.expectedOutput)}
           </div>
 
-          ${proj.feedbackNotes ? `
-            <div class="p-3.5 rounded-2xl bg-[#F0F3EF] border border-[#8A9A86]/40 text-xs text-[#2C2A27] space-y-1">
-              <p class="font-extrabold text-[#5E7C6B]">Catatan Status Audit${Number(proj.score ?? 0) > 0 ? ` · Skor ${esc(proj.score)}` : ''}</p>
-              <p class="text-[11px]">${esc(proj.feedbackNotes)}</p>
-            </div>
-          ` : ''}
-
-          ${!canRunAiAudit ? `
-            <div class="p-3.5 rounded-2xl bg-[#FDF0EB] border border-[#F2A68D] text-xs font-bold text-[#A64B2A]">
-              ${esc(auditHint)}
-            </div>
-          ` : ''}
+          <div class="p-3.5 rounded-2xl bg-[#F0F3EF] border border-[#8A9A86]/40 text-xs text-[#2C2A27] space-y-1">
+            <p class="font-extrabold text-[#5E7C6B]">Catatan Review${Number(proj.score ?? 0) > 0 ? ` · Skor ${esc(proj.score)}` : ''}</p>
+            <p class="text-[11px]">${esc(reviewNote)}</p>
+          </div>
 
           <form id="pj-form" class="space-y-3 pt-1">
             <div class="space-y-1.5">
               <label for="pj-url" class="block text-xs font-extrabold text-[#2C2A27]">Tautan Hasil Proyek (URL Publik)</label>
-              <input id="pj-url" type="url" value="${esc(state.projectUrl)}" placeholder="https://github.com/username/project-repo atau https://figma.com/..." ${!canRunAiAudit || state.submittingProject ? 'disabled' : ''} class="w-full px-4 py-3 rounded-xl bg-white border border-[#E8E2DA] text-xs font-medium focus:outline-none focus:border-[#D97757] disabled:bg-[#F5F0EA] disabled:text-[#9A948D]" />
+              <input id="pj-url" type="url" value="${esc(state.projectUrl)}" placeholder="https://github.com/username/project-repo atau https://figma.com/..." ${state.submittingProject ? 'disabled' : ''} class="w-full px-4 py-3 rounded-xl bg-white border border-[#E8E2DA] text-xs font-medium focus:outline-none focus:border-[#D97757] disabled:bg-[#F5F0EA] disabled:text-[#9A948D]" />
               <p class="text-[11px] text-[#6B6560]">Pastikan link repositori GitHub, demo Vercel/Netlify, Google Docs, atau Figma dapat diakses publik.</p>
             </div>
 
@@ -453,8 +658,8 @@
 
             <div class="flex items-center justify-end gap-2.5 pt-2">
               <button type="button" id="pj-cancel" class="px-4 py-2.5 rounded-xl border border-[#E8E2DA] bg-white text-xs font-extrabold text-[#6B6560] hover:text-[#2C2A27] cursor-pointer">Tutup</button>
-              <button type="submit" id="pj-submit" ${!canRunAiAudit || state.submittingProject ? 'disabled' : ''} class="px-5 py-2.5 rounded-xl text-xs font-extrabold transition-colors ${canRunAiAudit ? 'bg-[#D97757] hover:opacity-95 text-white cursor-pointer' : 'bg-[#E8E2DA] text-[#9A948D] cursor-not-allowed'} disabled:opacity-60">
-                ${state.submittingProject ? 'Mengirim ke AI Audit...' : 'Submit & Jalankan AI Audit →'}
+              <button type="submit" id="pj-submit" ${state.submittingProject ? 'disabled' : ''} class="px-5 py-2.5 rounded-xl text-xs font-extrabold transition-colors bg-[#D97757] hover:opacity-95 text-white cursor-pointer disabled:opacity-60">
+                ${state.submittingProject ? 'Mengirim Tautan...' : 'Kumpulkan Tautan Proyek →'}
               </button>
             </div>
           </form>
@@ -619,7 +824,7 @@
     render();
   }
 
-  function bindEvents(powTests, projects, canRunAiAudit) {
+  function bindEvents(powTests, projects) {
     document.querySelectorAll('[data-curriculum-course]').forEach((btn) => {
       btn.addEventListener('click', () => {
         openCurriculumCourse(btn.dataset.curriculumCourse, btn.dataset.enrolled === 'true');
@@ -646,12 +851,10 @@
     });
     document.getElementById('bt-submit')?.addEventListener('click', submitBlindTest);
 
-    const openAudit = () => {
-      if (!canRunAiAudit || !projects.length) return;
-      openProjectModal(null, projects);
-    };
-    document.getElementById('cr-open-audit')?.addEventListener('click', openAudit);
-    document.getElementById('cr-open-audit-card')?.addEventListener('click', openAudit);
+    document.getElementById('cr-mobile-show-more')?.addEventListener('click', () => {
+      state.mobileShowAllCourses = !state.mobileShowAllCourses;
+      render();
+    });
 
     document.querySelectorAll('[data-open-project]').forEach((btn) => {
       btn.addEventListener('click', () => openProjectModal(btn.dataset.openProject, projects));
@@ -667,9 +870,6 @@
     document.getElementById('pj-cancel')?.addEventListener('click', closeProjectModal);
     document.getElementById('pj-backdrop')?.addEventListener('click', (e) => {
       if (e.target.id === 'pj-backdrop') closeProjectModal();
-    });
-    document.getElementById('pj-select')?.addEventListener('change', (e) => {
-      openProjectModal(e.target.value, projects);
     });
     document.getElementById('pj-url')?.addEventListener('input', (e) => {
       state.projectUrl = e.target.value;
@@ -714,7 +914,8 @@
     }
     render();
     if (window.location.hash === '#pow-arena') {
-      document.getElementById('pow-arena')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const targetId = window.matchMedia('(max-width: 768px)').matches ? 'cr-mobile-pow-arena' : 'pow-arena';
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 

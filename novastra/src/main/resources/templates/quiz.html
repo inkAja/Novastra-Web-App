@@ -7,14 +7,51 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/assets/css/custom.css" />
+  <link rel="stylesheet" href="/assets/css/studypod.css?v=1" />
 </head>
-<body data-page="quiz" class="min-h-screen bg-[#FDFBF7] text-[#2C2A27]">
+<body data-page="quiz" class="sp-page min-h-screen bg-[#FDFBF7] text-[#2C2A27]">
+  <header class="sp-mobile-header">
+    <div class="sp-brand-bar">
+      <a href="/home" class="sp-brand-link" aria-label="Novastra Home">
+        <span class="sp-brand-circle" aria-hidden="true">N</span>
+        <span class="sp-brand-name">Novastra</span>
+      </a>
+    </div>
+    <div class="sp-sub-bar">
+      <a href="/learn" class="sp-back-link">
+        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        <span>Back</span>
+      </a>
+      <h1 class="sp-header-title">StudyPod</h1>
+      <span class="sp-sub-spacer" aria-hidden="true"></span>
+    </div>
+  </header>
+
   <main id="main-content" class="p-4 md:p-8 max-w-7xl mx-auto space-y-6"></main>
+
+  <nav class="sp-bottom-nav" aria-label="Navigasi Utama Mobile">
+    <a href="/home" class="sp-nav-item">
+      <span class="sp-nav-icon-box"><i data-lucide="home" class="w-5 h-5"></i></span>
+      <span class="sp-nav-label">Home</span>
+    </a>
+    <a href="/learn" class="sp-nav-item is-active" aria-current="page">
+      <span class="sp-nav-icon-box"><i data-lucide="book-open" class="w-5 h-5"></i></span>
+      <span class="sp-nav-label">Learn</span>
+    </a>
+    <a href="/career" class="sp-nav-item">
+      <span class="sp-nav-icon-box"><i data-lucide="briefcase" class="w-5 h-5"></i></span>
+      <span class="sp-nav-label">Career</span>
+    </a>
+    <a href="/profile" class="sp-nav-item">
+      <span class="sp-nav-icon-box"><i data-lucide="user" class="w-5 h-5"></i></span>
+      <span class="sp-nav-label">Profile</span>
+    </a>
+  </nav>
 
   <script src="/assets/js/data.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script src="/assets/js/storage.js"></script>
   <script src="/assets/js/components.js?v=2"></script>
-  <script src="/assets/js/quiz.js?v=3"></script>
+  <script src="/assets/js/quiz.js?v=4"></script>
 </body>
 </html>

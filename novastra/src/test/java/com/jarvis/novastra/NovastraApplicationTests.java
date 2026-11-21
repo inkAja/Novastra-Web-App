@@ -678,7 +678,7 @@ class NovastraApplicationTests {
 		pod.setSessionDate(LocalDate.now());
 		studyPodSessionRepository.save(pod);
 
-		// Unaudited submission (score = 0.00) must NOT appear in Verified Proof of Work
+		// Submitted portfolio URL (even with raw DB score = 0.00) auto-verifies as PoW without AI Audit
 		PortfolioSubmission pending = new PortfolioSubmission();
 		pending.setSubmissionId("SB999");
 		pending.setUserId(user.getUserId());
@@ -694,8 +694,11 @@ class NovastraApplicationTests {
 		Map<String, Object> activeToday = activeDays.get(activeDays.size() - 1);
 		assertEquals(5, activeToday.get("count"));
 		assertEquals(4, activeToday.get("level"));
-		assertTrue(((List<?>) activeProfile.get("verifiedProofOfWork")).isEmpty());
-		assertEquals(0, activeProfile.get("avgAiScore"));
+		List<Map<String, Object>> autoVerified = (List<Map<String, Object>>) activeProfile.get("verifiedProofOfWork");
+		assertEquals(1, autoVerified.size());
+		assertEquals("VERIFIED", autoVerified.get(0).get("status"));
+		assertTrue(((Number) activeProfile.get("avgPowScore")).intValue() >= 90);
+		assertEquals(activeProfile.get("avgPowScore"), activeProfile.get("avgAiScore"));
 	}
 
 	@Test
@@ -1034,6 +1037,134 @@ class NovastraApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.activeSkillGapsCount").value(0))
 				.andExpect(jsonPath("$.courses.length()").value((int) totalCourses));
+	}
+
+	@Test
+	@Transactional
+	@SuppressWarnings("unchecked")
+	void skillGapsRecalculateAcrossCurriculumBlindTestsPortfoliosAndRefresh() throws Exception {
+		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
+		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+		User user = authService.register("SkillGap Sync Tester", "skillgap.sync@novastra.id", "secret123");
+		onboardingService.saveOnboarding(
+				user.getUserId(), role.getRoleId(), 30, 1, List.of(roleSkills.get(0).getSkillId()));
+		String uid = user.getUserId();
+
+		// Initial state: 0% across all skills and 3 priority gaps
+		Map<String, Object> initial = careerService.getCareerRoadmap(uid);
+		List<Map<String, Object>> initialGaps = (List<Map<String, Object>>) initial.get("skillGapAnalysis");
+		assertEquals(6, initialGaps.size());
+		for (Map<String, Object> axis : initialGaps) {
+			assertEquals(0, ((Number) axis.get("currentLevel")).intValue());
+		}
+		assertEquals(3, ((List<?>) initial.get("topPriorityGaps")).size());
+
+		// Stage 1: Complete 100% curriculum -> completionFactor = 0.40
+		for (Map<String, Object> cur : (List<Map<String, Object>>) initial.get("curriculum")) {
+			String eid = String.valueOf(enrollmentService.enroll(uid, String.valueOf(cur.get("courseId"))).get("enrollmentId"));
+			enrollmentService.updateProgress(eid, BigDecimal.valueOf(100), 0);
+		}
+		List<Map<String, Object>> afterCourse = (List<Map<String, Object>>) careerService.getCareerRoadmap(uid).get("skillGapAnalysis");
+		for (Map<String, Object> axis : afterCourse) {
+			int target = ((Number) axis.get("targetLevel")).intValue();
+			assertEquals((int) Math.round(target * 0.40), ((Number) axis.get("currentLevel")).intValue());
+		}
+
+		// Stage 2: Pass 100% Blind Tests -> completionFactor = 0.70
+		for (Map<String, Object> bt : (List<Map<String, Object>>) initial.get("blindTests")) {
+			List<Map<String, Object>> btTasks = (List<Map<String, Object>>) bt.get("tasks");
+			microTaskService.submitBlindTest(
+					uid,
+					btTasks.stream()
+							.map(t -> new MicroTaskService.BlindTestAnswer(
+									String.valueOf(t.get("taskId")),
+									"Implementasi solusi terstruktur dengan pengujian menyeluruh dan integrasi penuh."))
+							.toList());
+		}
+		List<Map<String, Object>> afterPow = (List<Map<String, Object>>) careerService.getCareerRoadmap(uid).get("skillGapAnalysis");
+		for (Map<String, Object> axis : afterPow) {
+			int target = ((Number) axis.get("targetLevel")).intValue();
+			assertEquals((int) Math.round(target * 0.70), ((Number) axis.get("currentLevel")).intValue());
+		}
+
+		// Stage 3: Submit all portfolio projects -> 100% of targetLevel and 0 topPriorityGaps
+		for (Map<String, Object> proj : (List<Map<String, Object>>) initial.get("portfolioProjects")) {
+			careerService.submitPortfolioProject(
+					uid,
+					String.valueOf(proj.get("projectId")),
+					"https://github.com/novastra/sync-" + proj.get("projectId"));
+		}
+		List<com.jarvis.novastra.entity.UserSkillGap> persistedGaps = userSkillGapRepository.findByUserId(uid);
+		assertEquals(6, persistedGaps.size());
+
+		// Reset one row to 0 in DB to verify GET /api/career/{uid} auto-heals pre-existing accounts on refresh
+		com.jarvis.novastra.entity.UserSkillGap staleRow = persistedGaps.get(0);
+		staleRow.setCurrentLevel(BigDecimal.ZERO);
+		staleRow.setIsPriority(true);
+		userSkillGapRepository.saveAndFlush(staleRow);
+
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+		mockMvc.perform(get("/api/career/{userId}", uid))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.skillGapAnalysis.length()").value(6))
+				.andExpect(jsonPath("$.topPriorityGaps.length()").value(0))
+				.andExpect(jsonPath("$.skillGapAnalysis[0].gap").value(0))
+				.andExpect(jsonPath("$.skillGapAnalysis[5].gap").value(0));
+
+		for (com.jarvis.novastra.entity.UserSkillGap healed : userSkillGapRepository.findByUserId(uid)) {
+			assertTrue(healed.getCurrentLevel().compareTo(BigDecimal.ZERO) > 0);
+			assertFalse(Boolean.TRUE.equals(healed.getIsPriority()));
+		}
+	}
+
+	@Test
+	@Transactional
+	@SuppressWarnings("unchecked")
+	void profileAutoVerifiesPortfolioAndIssuesCertificatesOnCourseCompletion() throws Exception {
+		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
+		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+		User user = authService.register("Cert Auto Issuer", "cert.auto@novastra.id", "secret123");
+		onboardingService.saveOnboarding(
+				user.getUserId(), role.getRoleId(), 30, 2, List.of(roleSkills.get(0).getSkillId()));
+		String uid = user.getUserId();
+
+		Map<String, Object> roadmap = careerService.getCareerRoadmap(uid);
+		for (Map<String, Object> cur : (List<Map<String, Object>>) roadmap.get("curriculum")) {
+			String eid = String.valueOf(enrollmentService.enroll(uid, String.valueOf(cur.get("courseId"))).get("enrollmentId"));
+			enrollmentService.updateProgress(eid, BigDecimal.valueOf(100), 0);
+		}
+		for (Map<String, Object> bt : (List<Map<String, Object>>) roadmap.get("blindTests")) {
+			List<Map<String, Object>> btTasks = (List<Map<String, Object>>) bt.get("tasks");
+			microTaskService.submitBlindTest(
+					uid,
+					btTasks.stream()
+							.map(t -> new MicroTaskService.BlindTestAnswer(
+									String.valueOf(t.get("taskId")),
+									"Solusi arsitektur modular lengkap dengan validasi dan test."))
+							.toList());
+		}
+		for (Map<String, Object> proj : (List<Map<String, Object>>) roadmap.get("portfolioProjects")) {
+			careerService.submitPortfolioProject(
+					uid,
+					String.valueOf(proj.get("projectId")),
+					"https://github.com/novastra/cert-" + proj.get("projectId"));
+		}
+
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+		mockMvc.perform(get("/api/profile/{userId}", uid))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.verifiedProofOfWork.length()").value(3))
+				.andExpect(jsonPath("$.verifiedProofOfWork[0].status").value("VERIFIED"))
+				.andExpect(jsonPath("$.avgPowScore").value(100))
+				.andExpect(jsonPath("$.certificates.length()").value(3))
+				.andExpect(jsonPath("$.certificates[0].issuer").value("Novastra Academy"))
+				.andExpect(jsonPath("$.certificates[0].recipientName").value("Cert Auto Issuer"))
+				.andExpect(jsonPath("$.certificates[0].instructor").isNotEmpty())
+				.andExpect(jsonPath("$.certificates[0].field").value("Full-Stack Web Developer"))
+				.andExpect(jsonPath("$.certificates[0].duration").isNotEmpty())
+				.andExpect(jsonPath("$.certificates[0].issuedDate").isNotEmpty())
+				.andExpect(jsonPath("$.certificates[0].submissionUrl").isNotEmpty())
+				.andExpect(jsonPath("$.certificates[0].certificateId").value(org.hamcrest.Matchers.startsWith("NST-FSW-")));
 	}
 
 }

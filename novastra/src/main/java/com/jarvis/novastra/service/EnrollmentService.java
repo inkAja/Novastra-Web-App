@@ -28,16 +28,19 @@ public class EnrollmentService {
     private final CourseRepository courseRepository;
     private final CourseModuleRepository courseModuleRepository;
     private final UserRepository userRepository;
+    private final CareerService careerService;
 
     public EnrollmentService(
             EnrollmentRepository enrollmentRepository,
             CourseRepository courseRepository,
             CourseModuleRepository courseModuleRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            CareerService careerService) {
         this.enrollmentRepository = enrollmentRepository;
         this.courseRepository = courseRepository;
         this.courseModuleRepository = courseModuleRepository;
         this.userRepository = userRepository;
+        this.careerService = careerService;
     }
 
     @Transactional
@@ -106,6 +109,7 @@ public class EnrollmentService {
             user.awardXp(awarded);
             userRepository.save(user);
         }
+        careerService.recalculateUserSkillGaps(enrollment.getUserId());
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("enrollmentId", enrollment.getEnrollmentId());

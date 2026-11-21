@@ -194,7 +194,7 @@
               <p class="ln-quick-sub">${state.totalModules} modules</p>
             </div>
           </div>
-          <i data-lucide="chevron-right" class="w-4 h-4 text-[#A89F98] shrink-0"></i>
+          <i data-lucide="chevron-right" class="ln-quick-chevron w-4 h-4 text-[#A89F98] shrink-0"></i>
         </button>
 
         <a href="/career#pow-arena" class="ln-quick-card">
@@ -205,7 +205,7 @@
               <p class="ln-quick-sub">${state.totalAssessments} tasks</p>
             </div>
           </div>
-          <i data-lucide="chevron-right" class="w-4 h-4 text-[#A89F98] shrink-0"></i>
+          <i data-lucide="chevron-right" class="ln-quick-chevron w-4 h-4 text-[#A89F98] shrink-0"></i>
         </a>
 
         <a href="/quiz" class="ln-quick-card">
@@ -213,16 +213,23 @@
             <span class="ln-quick-icon"><i data-lucide="users" class="w-5 h-5"></i></span>
             <div class="min-w-0">
               <p class="ln-quick-title">StudyPod</p>
-              <p class="ln-quick-sub">Live Peer Practice · ${state.studyPodTopicsCount} topik</p>
+              <p class="ln-quick-sub">
+                <span class="ln-desktop-inline">Live Peer Practice · ${state.studyPodTopicsCount} topik</span>
+                <span class="ln-mobile-inline">Peer Practice</span>
+              </p>
             </div>
           </div>
-          <i data-lucide="chevron-right" class="w-4 h-4 text-[#A89F98] shrink-0"></i>
+          <i data-lucide="chevron-right" class="ln-quick-chevron w-4 h-4 text-[#A89F98] shrink-0"></i>
         </a>
       </section>
 
       <section id="ln-catalog-section" class="space-y-4 scroll-mt-24">
         <div class="ln-catalog-head">
-          <h2 class="ln-catalog-label">ALL COURSES (${visibleCourses.length})</h2>
+          <h2 class="ln-catalog-label">
+            <span class="ln-desktop-inline">ALL COURSES (${visibleCourses.length})</span>
+            <span class="ln-mobile-inline">ALL COURSE</span>
+          </h2>
+          <span class="ln-mobile-count">${visibleCourses.length} courses</span>
         </div>
 
         ${state.loading ? `
@@ -320,7 +327,7 @@
           </div>
           <label class="ln-mobile-search">
             <i data-lucide="search" class="w-4 h-4 text-[#A89F98] shrink-0"></i>
-            <input id="ln-mobile-search-input" type="search" placeholder="Search courses, skills..." autocomplete="off" />
+            <input id="ln-mobile-search-input" type="search" placeholder="Search courses, skills, topics..." autocomplete="off" />
           </label>
         </section>
         <div id="ln-workspace-body" class="space-y-6"></div>

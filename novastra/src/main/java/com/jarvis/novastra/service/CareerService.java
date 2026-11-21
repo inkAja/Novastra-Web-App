@@ -26,6 +26,7 @@ import com.jarvis.novastra.repository.UserRepository;
 import com.jarvis.novastra.repository.UserSkillGapRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,10 +84,12 @@ public class CareerService {
         this.userSkillGapRepository = userSkillGapRepository;
     }
 
+    @Transactional
     public Map<String, Object> getCareerData(String userId) {
         return getCareerRoadmap(userId);
     }
 
+    @Transactional
     public Map<String, Object> getCareerRoadmap(String userId) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId wajib diisi.");
@@ -120,6 +123,8 @@ public class CareerService {
             empty.put("canRunAiAudit", false);
             return empty;
         }
+
+        recalculateUserSkillGaps(uid);
 
         String roleId = role.getRoleId();
         String roleName = role.getRoleName();
@@ -173,6 +178,7 @@ public class CareerService {
                 .toList();
 
         List<String> topPriorityGaps = sortedByGap.stream()
+                .filter(m -> ((Number) m.get("gap")).intValue() > 0)
                 .limit(3)
                 .map(m -> String.valueOf(m.get("skillName")))
                 .toList();
@@ -258,6 +264,7 @@ public class CareerService {
         submission.setScore(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         submission.setFeedbackNotes("Menunggu proses AI Audit...");
         PortfolioSubmission saved = portfolioSubmissionRepository.save(submission);
+        recalculateUserSkillGaps(uid);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("submissionId", saved.getSubmissionId());
@@ -327,6 +334,159 @@ public class CareerService {
                 .toList();
     }
 
+    /** Menghitung ulang dan menyimpan skor current_level skill user berdasarkan progres kurikulum, Blind Test, dan portofolio. */
+    @Transactional
+    public void recalculateUserSkillGaps(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+        String uid = userId.trim();
+        User user = userRepository.findById(uid).orElse(null);
+        if (user == null || !user.isOnboarded()) {
+            return;
+        }
+        CareerRole role = careerRoleRepository.findById(user.getRoleId().trim()).orElse(null);
+        if (role == null) {
+            return;
+        }
+
+        String roleId = role.getRoleId();
+        String roleName = role.getRoleName();
+        List<CareerSkillCalculation> calcs = careerSkillCalculationRepository.findByRoleId(roleId);
+        if (calcs.isEmpty()) {
+            return;
+        }
+
+        Map<String, Skill> skillMap = skillRepository.findAllById(
+                        calcs.stream().map(CareerSkillCalculation::getSkillId).collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(Skill::getSkillId, s -> s));
+        List<CareerSkillCalculation> selected = selectRoleSkillCalculations(calcs, roleName, skillMap);
+
+        List<Course> roleCourses = courseRepository.findByTypeCourseIgnoreCase(roleName);
+        List<String> courseIds = roleCourses.stream().map(Course::getCourseId).toList();
+
+        double courseRatio = 0.0;
+        if (!roleCourses.isEmpty()) {
+            Map<String, Double> progressByCourse = enrollmentRepository.findByUserId(uid).stream()
+                    .filter(e -> e.getCourseId() != null)
+                    .collect(Collectors.toMap(
+                            e -> e.getCourseId().trim(),
+                            e -> e.getProgressPercentage() != null ? e.getProgressPercentage().doubleValue() : 0.0,
+                            Math::max));
+            double sumRatio = 0.0;
+            for (Course course : roleCourses) {
+                double pct = progressByCourse.getOrDefault(course.getCourseId().trim(), 0.0);
+                sumRatio += Math.max(0.0, Math.min(1.0, pct / 100.0));
+            }
+            courseRatio = sumRatio / roleCourses.size();
+        }
+
+        double powRatio = 0.0;
+        if (!courseIds.isEmpty()) {
+            List<CourseModule> modules = courseModuleRepository
+                    .findByCourseIdInOrderByCourseIdAscSequenceOrderAsc(courseIds);
+            if (!modules.isEmpty()) {
+                List<String> moduleIds = modules.stream().map(CourseModule::getModuleId).toList();
+                List<MicroTask> tasks = microTaskRepository.findByModuleIdInAndTaskType(moduleIds, BLIND_TEST);
+                if (tasks.isEmpty()) {
+                    tasks = microTaskRepository.findByModuleIdIn(moduleIds);
+                }
+                if (!tasks.isEmpty()) {
+                    List<String> taskIds = tasks.stream().map(MicroTask::getTaskId).toList();
+                    Map<String, BigDecimal> bestByTask = microTaskResultRepository
+                            .findByUserIdAndTaskIdIn(uid, taskIds).stream()
+                            .filter(r -> r.getTaskId() != null && r.getScore() != null)
+                            .collect(Collectors.toMap(
+                                    r -> r.getTaskId().trim(),
+                                    MicroTaskResult::getScore,
+                                    (a, b) -> a.compareTo(b) >= 0 ? a : b));
+                    long passedCount = taskIds.stream()
+                            .map(tid -> bestByTask.get(tid.trim()))
+                            .filter(score -> score != null && score.compareTo(PASSING_SCORE) >= 0)
+                            .count();
+                    powRatio = (double) passedCount / tasks.size();
+                }
+            }
+        }
+
+        double portfolioRatio = 0.0;
+        if (!courseIds.isEmpty()) {
+            List<PortfolioProject> projects = portfolioProjectRepository.findByCourseIdIn(courseIds);
+            if (!projects.isEmpty()) {
+                List<String> projectIds = projects.stream().map(PortfolioProject::getProjectId).toList();
+                Map<String, PortfolioSubmission> subByProject = portfolioSubmissionRepository
+                        .findByUserIdAndProjectIdIn(uid, projectIds).stream()
+                        .filter(s -> s.getProjectId() != null)
+                        .collect(Collectors.toMap(
+                                s -> s.getProjectId().trim(),
+                                s -> s,
+                                (a, b) -> a));
+                long submittedCount = projectIds.stream()
+                        .map(pid -> subByProject.get(pid.trim()))
+                        .filter(sub -> sub != null && sub.getExternalUrl() != null && !sub.getExternalUrl().isBlank())
+                        .count();
+                portfolioRatio = (double) submittedCount / projects.size();
+            }
+        }
+
+        double completionFactor = (courseRatio * 0.40) + (powRatio * 0.30) + (portfolioRatio * 0.30);
+        boolean fullyCompleted = courseRatio >= 1.0 && powRatio >= 1.0 && portfolioRatio >= 1.0;
+
+        Map<String, UserSkillGap> existingBySkill = userSkillGapRepository.findByUserId(uid).stream()
+                .collect(Collectors.toMap(UserSkillGap::getSkillId, g -> g, (a, b) -> a));
+
+        List<UserSkillGap> toSave = new ArrayList<>();
+        for (CareerSkillCalculation calc : selected) {
+            int targetLevel = calc.getTargetLevel() != null ? calc.getTargetLevel().intValue() : 80;
+            int newCurrentLevel = fullyCompleted
+                    ? targetLevel
+                    : Math.max(0, Math.min(100, (int) Math.round(targetLevel * completionFactor)));
+            BigDecimal newLevelBd = BigDecimal.valueOf(newCurrentLevel).setScale(2, RoundingMode.HALF_UP);
+
+            UserSkillGap existing = existingBySkill.get(calc.getSkillId());
+            if (existing != null) {
+                boolean levelChanged = existing.getCurrentLevel() == null
+                        || existing.getCurrentLevel().compareTo(newLevelBd) != 0;
+                boolean priorityCleared = newCurrentLevel >= targetLevel && Boolean.TRUE.equals(existing.getIsPriority());
+                if (levelChanged || priorityCleared) {
+                    existing.setCurrentLevel(newLevelBd);
+                    if (newCurrentLevel >= targetLevel) {
+                        existing.setIsPriority(false);
+                    }
+                    toSave.add(existing);
+                }
+            } else {
+                UserSkillGap created = new UserSkillGap();
+                created.setUserId(uid);
+                created.setSkillId(calc.getSkillId());
+                created.setCurrentLevel(newLevelBd);
+                created.setIsPriority(false);
+                toSave.add(created);
+            }
+        }
+
+        if (!toSave.isEmpty()) {
+            userSkillGapRepository.saveAll(toSave);
+        }
+    }
+
+    private List<CareerSkillCalculation> selectRoleSkillCalculations(
+            List<CareerSkillCalculation> calcs, String roleName, Map<String, Skill> skillMap) {
+        // Prioritize the 6 skills tagged with roleName so the radar chart renders a clean role-specific hexagon
+        List<CareerSkillCalculation> roleTagged = calcs.stream()
+                .filter(c -> {
+                    Skill s = skillMap.get(c.getSkillId());
+                    return s != null && roleName.equalsIgnoreCase(s.getCategory());
+                })
+                .toList();
+        List<CareerSkillCalculation> selected = roleTagged.isEmpty() ? calcs : roleTagged;
+        return selected.stream()
+                .sorted(Comparator.comparing(CareerSkillCalculation::getSkillId))
+                .limit(6)
+                .toList();
+    }
+
     private List<Map<String, Object>> buildSkillGaps(String userId, String roleId, String roleName) {
         List<CareerSkillCalculation> calcs = careerSkillCalculationRepository.findByRoleId(roleId);
         if (calcs.isEmpty()) {
@@ -337,21 +497,12 @@ public class CareerService {
                 .stream()
                 .collect(Collectors.toMap(Skill::getSkillId, s -> s));
 
-        // Prioritize the 6 skills tagged with roleName so the radar chart renders a clean role-specific hexagon
-        List<CareerSkillCalculation> roleTagged = calcs.stream()
-                .filter(c -> {
-                    Skill s = skillMap.get(c.getSkillId());
-                    return s != null && roleName.equalsIgnoreCase(s.getCategory());
-                })
-                .toList();
-        List<CareerSkillCalculation> selected = roleTagged.isEmpty() ? calcs : roleTagged;
+        List<CareerSkillCalculation> selected = selectRoleSkillCalculations(calcs, roleName, skillMap);
 
         Map<String, UserSkillGap> userGapMap = userSkillGapRepository.findByUserId(userId).stream()
                 .collect(Collectors.toMap(UserSkillGap::getSkillId, g -> g, (a, b) -> a));
 
         return selected.stream()
-                .sorted(Comparator.comparing(CareerSkillCalculation::getSkillId))
-                .limit(6)
                 .map(calc -> {
                     Skill s = skillMap.get(calc.getSkillId());
                     UserSkillGap ug = userGapMap.get(calc.getSkillId());

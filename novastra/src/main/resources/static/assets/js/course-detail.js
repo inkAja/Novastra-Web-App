@@ -101,6 +101,61 @@
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }
 
+  function formatTimeShort(sec) {
+    const total = Math.max(0, Math.round(Number(sec) || 0));
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+  }
+
+  function formatRemainingLabel(durationSec, progressPct) {
+    const remSec = Math.max(0, durationSec * (1 - (progressPct || 0) / 100));
+    if (progressPct >= 100 || remSec <= 0) return 'Selesai';
+    const remMins = Math.max(1, Math.ceil(remSec / 60));
+    return `${remMins} Mins remaining`;
+  }
+
+  function isDirectVideoUrl(url) {
+    return /\.(mp4|webm|ogg)(\?.*)?$/i.test(String(url || '').trim());
+  }
+
+  function getMobileChapterMarkers() {
+    const markers = state.microTasks.map((mt, idx) => ({
+      pct: mt.triggerPct,
+      done: Boolean(mt.isCompleted),
+      label: `Checkpoint ${idx + 1} (${formatTimeShort(mt.timestampSeconds)})`
+    }));
+    [35, 68].forEach((stop) => {
+      if (markers.length < 3 && !markers.some((m) => Math.abs(m.pct - stop) < 8)) {
+        markers.push({ pct: stop, done: state.videoProgress >= stop, label: `Bab (${stop}%)` });
+      }
+    });
+    return markers.sort((a, b) => a.pct - b.pct).slice(0, 3);
+  }
+
+  function seekToProgress(targetPct) {
+    const clamped = Math.max(0, Math.min(100, Math.round(targetPct)));
+    const blocker = findBlockingTask(clamped);
+    if (blocker) {
+      lockPlayerOnTask(blocker);
+      return;
+    }
+    state.videoProgress = clamped;
+    syncTaskLockState();
+    const videoEl = document.getElementById('cdm-video-el');
+    if (videoEl && Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+      videoEl.currentTime = (clamped / 100) * videoEl.duration;
+    }
+    if (state.videoProgress >= 100) {
+      state.videoProgress = 100;
+      stopVideoPlayback();
+      updatePlayerProgressDom();
+      handleVideoCompleted();
+      return;
+    }
+    render();
+  }
+
   function computeTriggerPct(task, durationSeconds) {
     const dur = Number(durationSeconds || 0);
     const ts = Number(task?.timestampSeconds || 0);
@@ -154,12 +209,22 @@
 
   function updatePlayerProgressDom() {
     const durationSec = Number(getActiveModule()?.durationSeconds || 900);
+    const currentSec = (state.videoProgress / 100) * durationSec;
     const bar = document.getElementById('cd-video-bar');
     const pctText = document.getElementById('cd-video-pct');
     const timeText = document.getElementById('cd-video-time');
     if (bar) bar.style.width = `${state.videoProgress}%`;
     if (pctText) pctText.textContent = `${Math.round(state.videoProgress)}%`;
-    if (timeText) timeText.textContent = `${formatTime((state.videoProgress / 100) * durationSec)} / ${formatTime(durationSec)}`;
+    if (timeText) timeText.textContent = `${formatTime(currentSec)} / ${formatTime(durationSec)}`;
+
+    const mobFill = document.getElementById('cdm-scrub-fill');
+    const mobThumb = document.getElementById('cdm-scrub-thumb');
+    const mobCur = document.getElementById('cdm-time-current');
+    const mobRem = document.getElementById('cdm-remaining-text');
+    if (mobFill) mobFill.style.width = `${state.videoProgress}%`;
+    if (mobThumb) mobThumb.style.left = `${state.videoProgress}%`;
+    if (mobCur) mobCur.textContent = formatTimeShort(currentSec);
+    if (mobRem) mobRem.textContent = formatRemainingLabel(durationSec, state.videoProgress);
   }
 
   async function loadModuleMicroTasks(moduleId, session) {
@@ -479,119 +544,125 @@
     const pendingTasks = state.microTasks.filter((t) => !t.isCompleted).length;
 
     main.innerHTML = `
-      ${state.feedbackMsg ? `<div class="mb-4 p-3.5 rounded-2xl bg-[#F0F3EF] border border-[#8A9A86]/50 text-xs font-bold text-[#5E7C6B]">${esc(state.feedbackMsg)}</div>` : ''}
+      <div class="cd-desktop-view">
+        ${state.feedbackMsg ? `<div class="mb-4 p-3.5 rounded-2xl bg-[#F0F3EF] border border-[#8A9A86]/50 text-xs font-bold text-[#5E7C6B]">${esc(state.feedbackMsg)}</div>` : ''}
 
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <div>
-          <div class="flex flex-wrap items-center gap-2">
-            <a href="/home" class="text-xs font-bold text-[#6B6560] hover:text-[#D97757]">← Kembali ke Home</a>
-            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold" style="background:${fm.bg};color:${fm.color}">${esc(fm.label)}</span>
-          </div>
-          <h1 class="text-xl md:text-2xl font-black text-[#2C2A27] mt-2">${esc(state.course.title)}</h1>
-          <p class="text-xs text-[#6B6560] mt-0.5">Instruktur: ${esc(state.course.instructorName || state.course.instructor || '-')} · ${esc(state.course.duration ?? '')} mnt · Progres Course: <span class="font-extrabold text-[#D97757]">${coursePct}%</span></p>
-        </div>
-        <button type="button" id="cd-open-classroom" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FDF0EB] border border-[#F2A68D] text-[#D97757] text-xs font-extrabold hover:bg-[#D97757] hover:text-white transition-colors shrink-0 cursor-pointer">
-          <i data-lucide="video" class="w-4 h-4"></i> Bootcamp Cohort &amp; Live Classroom
-        </button>
-      </div>
-
-      <div class="mb-5 h-2 rounded-full bg-[#F5F0EA] overflow-hidden">
-        <div class="h-full rounded-full bg-[#8A9A86] transition-all duration-300" style="width:${coursePct}%"></div>
-      </div>
-
-      <div class="grid grid-cols-1 min-[900px]:grid-cols-[64fr_36fr] gap-6 items-start">
-        <div class="space-y-4">
-          <div class="rounded-3xl overflow-hidden bg-[#2C2A27] border border-[#E8E2DA] shadow-sm">
-            <div class="relative aspect-video bg-gradient-to-br from-[#2C2A27] via-[#3A3530] to-[#1F1D1B] flex flex-col items-center justify-center p-6 text-white">
-              <div class="text-center max-w-md">
-                <span class="px-2.5 py-1 rounded-full bg-white/10 text-[11px] font-bold text-[#F2A68D]">${esc(activeMod?.duration || (hasModule ? '15 mnt' : 'Belum ada modul'))}</span>
-                <h2 class="text-lg md:text-xl font-extrabold mt-2">${esc(activeMod?.title || state.course.title)}</h2>
-                <p class="text-xs text-white/70 mt-1">${!hasModule ? 'Belum ada modul di database untuk course ini' : state.isTaskLocked ? 'Video terkunci · Selesaikan Micro-Task terlebih dahulu' : state.playing ? `Memutar pada kecepatan ${state.speed}x` : 'Klik Play untuk memulai materi modul'}</p>
-              </div>
-              <button type="button" id="cd-play-center" class="mt-4 w-14 h-14 rounded-full bg-[#D97757] hover:scale-105 text-white flex items-center justify-center shadow-lg transition-transform cursor-pointer" aria-label="Play atau Pause">
-                <i data-lucide="${state.playing ? 'pause' : 'play'}" class="w-6 h-6"></i>
-              </button>
-              ${state.ccOn ? `
-                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-lg bg-black/75 text-xs text-white/95 max-w-[90%] text-center">
-                  [CC] "Pastikan validasi boundary dilakukan sebelum data masuk ke domain service."
-                </div>
-              ` : ''}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <a href="/home" class="text-xs font-bold text-[#6B6560] hover:text-[#D97757]">← Kembali ke Home</a>
+              <span class="px-2.5 py-1 rounded-full text-[11px] font-bold" style="background:${fm.bg};color:${fm.color}">${esc(fm.label)}</span>
             </div>
+            <h1 class="text-xl md:text-2xl font-black text-[#2C2A27] mt-2">${esc(state.course.title)}</h1>
+            <p class="text-xs text-[#6B6560] mt-0.5">Instruktur: ${esc(state.course.instructorName || state.course.instructor || '-')} · ${esc(state.course.duration ?? '')} mnt · Progres Course: <span class="font-extrabold text-[#D97757]">${coursePct}%</span></p>
+          </div>
+          <button type="button" id="cd-open-classroom" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FDF0EB] border border-[#F2A68D] text-[#D97757] text-xs font-extrabold hover:bg-[#D97757] hover:text-white transition-colors shrink-0 cursor-pointer">
+            <i data-lucide="video" class="w-4 h-4"></i> Bootcamp Cohort &amp; Live Classroom
+          </button>
+        </div>
 
-            <div class="p-4 bg-[#FAF8F5] border-t border-[#E8E2DA] space-y-3">
-              <div class="flex items-center gap-3">
-                <button type="button" id="cd-play-btn" class="px-3 py-1.5 rounded-lg bg-[#D97757] text-white text-xs font-extrabold cursor-pointer">${state.playing ? 'Pause' : 'Play'}</button>
-                <div class="flex-1 h-2 rounded-full bg-[#E8E2DA] overflow-hidden cursor-pointer" id="cd-progress-track">
-                  <div id="cd-video-bar" class="h-full bg-[#D97757] transition-all duration-150" style="width:${state.videoProgress}%"></div>
+        <div class="mb-5 h-2 rounded-full bg-[#F5F0EA] overflow-hidden">
+          <div class="h-full rounded-full bg-[#8A9A86] transition-all duration-300" style="width:${coursePct}%"></div>
+        </div>
+
+        <div class="grid grid-cols-1 min-[900px]:grid-cols-[64fr_36fr] gap-6 items-start">
+          <div class="space-y-4">
+            <div class="rounded-3xl overflow-hidden bg-[#2C2A27] border border-[#E8E2DA] shadow-sm">
+              <div class="relative aspect-video bg-gradient-to-br from-[#2C2A27] via-[#3A3530] to-[#1F1D1B] flex flex-col items-center justify-center p-6 text-white">
+                <div class="text-center max-w-md">
+                  <span class="px-2.5 py-1 rounded-full bg-white/10 text-[11px] font-bold text-[#F2A68D]">${esc(activeMod?.duration || (hasModule ? '15 mnt' : 'Belum ada modul'))}</span>
+                  <h2 class="text-lg md:text-xl font-extrabold mt-2">${esc(activeMod?.title || state.course.title)}</h2>
+                  <p class="text-xs text-white/70 mt-1">${!hasModule ? 'Belum ada modul di database untuk course ini' : state.isTaskLocked ? 'Video terkunci · Selesaikan Micro-Task terlebih dahulu' : state.playing ? `Memutar pada kecepatan ${state.speed}x` : 'Klik Play untuk memulai materi modul'}</p>
                 </div>
-                <span id="cd-video-time" class="text-[11px] font-mono text-[#6B6560] whitespace-nowrap">${formatTime((state.videoProgress / 100) * durationSec)} / ${formatTime(durationSec)}</span>
-                <span id="cd-video-pct" class="text-xs font-mono font-bold text-[#6B6560] w-10 text-right">${Math.round(state.videoProgress)}%</span>
+                <button type="button" id="cd-play-center" class="mt-4 w-14 h-14 rounded-full bg-[#D97757] hover:scale-105 text-white flex items-center justify-center shadow-lg transition-transform cursor-pointer" aria-label="Play atau Pause">
+                  <i data-lucide="${state.playing ? 'pause' : 'play'}" class="w-6 h-6"></i>
+                </button>
+                ${state.ccOn ? `
+                  <div class="absolute bottom-4 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-lg bg-black/75 text-xs text-white/95 max-w-[90%] text-center">
+                    [CC] "Pastikan validasi boundary dilakukan sebelum data masuk ke domain service."
+                  </div>
+                ` : ''}
               </div>
 
-              ${state.isTaskLocked ? `
-                <div class="p-3 rounded-xl bg-[#FDF0EB] border border-[#F2A68D] flex flex-wrap items-center justify-between gap-2">
-                  <p class="text-xs font-bold text-[#A64B2A]">Selesaikan Micro-Task terlebih dahulu untuk melanjutkan video.</p>
-                  <button type="button" id="cd-open-locked-task" class="px-3 py-1.5 rounded-lg bg-[#D97757] text-white text-xs font-extrabold cursor-pointer">Buka Micro-Task</button>
+              <div class="p-4 bg-[#FAF8F5] border-t border-[#E8E2DA] space-y-3">
+                <div class="flex items-center gap-3">
+                  <button type="button" id="cd-play-btn" class="px-3 py-1.5 rounded-lg bg-[#D97757] text-white text-xs font-extrabold cursor-pointer">${state.playing ? 'Pause' : 'Play'}</button>
+                  <div class="flex-1 h-2 rounded-full bg-[#E8E2DA] overflow-hidden cursor-pointer" id="cd-progress-track">
+                    <div id="cd-video-bar" class="h-full bg-[#D97757] transition-all duration-150" style="width:${state.videoProgress}%"></div>
+                  </div>
+                  <span id="cd-video-time" class="text-[11px] font-mono text-[#6B6560] whitespace-nowrap">${formatTime((state.videoProgress / 100) * durationSec)} / ${formatTime(durationSec)}</span>
+                  <span id="cd-video-pct" class="text-xs font-mono font-bold text-[#6B6560] w-10 text-right">${Math.round(state.videoProgress)}%</span>
                 </div>
-              ` : ''}
 
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="flex flex-wrap items-center gap-2">
-                  <div class="flex items-center gap-1 bg-white border border-[#E8E2DA] rounded-lg p-1">
-                    ${[1, 1.25, 1.5].map((sp) => `
-                      <button type="button" data-speed="${sp}" class="px-2 py-1 rounded text-[11px] font-extrabold cursor-pointer ${state.speed === sp ? 'bg-[#D97757] text-white' : 'text-[#6B6560]'}">${sp}x</button>
-                    `).join('')}
+                ${state.isTaskLocked ? `
+                  <div class="p-3 rounded-xl bg-[#FDF0EB] border border-[#F2A68D] flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-xs font-bold text-[#A64B2A]">Selesaikan Micro-Task terlebih dahulu untuk melanjutkan video.</p>
+                    <button type="button" id="cd-open-locked-task" class="px-3 py-1.5 rounded-lg bg-[#D97757] text-white text-xs font-extrabold cursor-pointer">Buka Micro-Task</button>
+                  </div>
+                ` : ''}
+
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex items-center gap-1 bg-white border border-[#E8E2DA] rounded-lg p-1">
+                      ${[1, 1.25, 1.5].map((sp) => `
+                        <button type="button" data-speed="${sp}" class="px-2 py-1 rounded text-[11px] font-extrabold cursor-pointer ${state.speed === sp ? 'bg-[#D97757] text-white' : 'text-[#6B6560]'}">${sp}x</button>
+                      `).join('')}
+                    </div>
+
+                    <label class="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white border border-[#E8E2DA] text-xs text-[#6B6560]">
+                      <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                      <input id="cd-volume" type="range" min="0" max="100" value="${state.volume}" class="w-16 accent-[#D97757]" aria-label="Volume" />
+                    </label>
+
+                    <button type="button" id="cd-cc-btn" class="px-2.5 py-1.5 rounded-lg border text-xs font-extrabold cursor-pointer ${state.ccOn ? 'bg-[#8A9A86] text-white border-[#8A9A86]' : 'bg-white text-[#6B6560] border-[#E8E2DA]'}">
+                      CC: ${state.ccOn ? 'ON' : 'OFF'}
+                    </button>
                   </div>
 
-                  <label class="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white border border-[#E8E2DA] text-xs text-[#6B6560]">
-                    <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
-                    <input id="cd-volume" type="range" min="0" max="100" value="${state.volume}" class="w-16 accent-[#D97757]" aria-label="Volume" />
-                  </label>
-
-                  <button type="button" id="cd-cc-btn" class="px-2.5 py-1.5 rounded-lg border text-xs font-extrabold cursor-pointer ${state.ccOn ? 'bg-[#8A9A86] text-white border-[#8A9A86]' : 'bg-white text-[#6B6560] border-[#E8E2DA]'}">
-                    CC: ${state.ccOn ? 'ON' : 'OFF'}
+                  <button type="button" id="cd-mark-complete" ${(!hasModule || state.completing) ? 'disabled' : ''} class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${isCompleted ? 'bg-[#8A9A86] text-white border-[#8A9A86]' : 'bg-[#D97757] text-white border-[#D97757] hover:opacity-95'} disabled:opacity-60 disabled:cursor-not-allowed">
+                    <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                    <span>${state.completing ? 'Menyimpan...' : !hasModule ? 'Modul Belum Tersedia' : isCompleted ? 'Selesai ✓' : 'Tandai Selesai (+50 XP)'}</span>
                   </button>
                 </div>
-
-                <button type="button" id="cd-mark-complete" ${(!hasModule || state.completing) ? 'disabled' : ''} class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${isCompleted ? 'bg-[#8A9A86] text-white border-[#8A9A86]' : 'bg-[#D97757] text-white border-[#D97757] hover:opacity-95'} disabled:opacity-60 disabled:cursor-not-allowed">
-                  <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-                  <span>${state.completing ? 'Menyimpan...' : !hasModule ? 'Modul Belum Tersedia' : isCompleted ? 'Selesai ✓' : 'Tandai Selesai (+50 XP)'}</span>
-                </button>
               </div>
+            </div>
+
+            <div class="rounded-2xl bg-white border border-[#E8E2DA] overflow-hidden">
+              <button type="button" id="cd-toggle-overview" class="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-[#FAF8F5] transition-colors cursor-pointer">
+                <div>
+                  <p class="text-xs font-extrabold uppercase tracking-wider text-[#8A9A86]">Module Summary</p>
+                  <p class="text-sm font-black text-[#2C2A27] mt-0.5">${esc(activeMod?.title || state.course.title)}</p>
+                </div>
+                <i data-lucide="${state.overviewOpen ? 'chevron-up' : 'chevron-down'}" class="w-5 h-5 text-[#6B6560]"></i>
+              </button>
+              ${state.overviewOpen ? `
+                <div class="px-5 pb-5 pt-1 border-t border-[#E8E2DA] text-xs text-[#6B6560] space-y-2 leading-relaxed">
+                  <p>${esc(state.course.desc || `Pelajari ${state.course.title} bersama ${state.course.instructorName || 'instruktur Novastra'}.`)}</p>
+                </div>
+              ` : ''}
             </div>
           </div>
 
-          <div class="rounded-2xl bg-white border border-[#E8E2DA] overflow-hidden">
-            <button type="button" id="cd-toggle-overview" class="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-[#FAF8F5] transition-colors cursor-pointer">
-              <div>
-                <p class="text-xs font-extrabold uppercase tracking-wider text-[#8A9A86]">Module Summary</p>
-                <p class="text-sm font-black text-[#2C2A27] mt-0.5">${esc(activeMod?.title || state.course.title)}</p>
-              </div>
-              <i data-lucide="${state.overviewOpen ? 'chevron-up' : 'chevron-down'}" class="w-5 h-5 text-[#6B6560]"></i>
-            </button>
-            ${state.overviewOpen ? `
-              <div class="px-5 pb-5 pt-1 border-t border-[#E8E2DA] text-xs text-[#6B6560] space-y-2 leading-relaxed">
-                <p>${esc(state.course.desc || `Pelajari ${state.course.title} bersama ${state.course.instructorName || 'instruktur Novastra'}.`)}</p>
-              </div>
-            ` : ''}
-          </div>
+          <aside class="rounded-3xl bg-white border border-[#E8E2DA] overflow-hidden">
+            <div class="grid grid-cols-3 border-b border-[#E8E2DA] bg-[#FAF8F5]">
+              ${[
+                ['upnext', 'Up Next'],
+                ['discussion', 'Discussion'],
+                ['microtasks', 'Micro-Tasks']
+              ].map(([key, label]) => `
+                <button type="button" data-right-tab="${key}" class="py-3.5 text-xs font-extrabold border-b-2 transition-colors cursor-pointer ${state.rightTab === key ? 'border-[#D97757] text-[#D97757] bg-white' : 'border-transparent text-[#6B6560]'}">${label}${key === 'microtasks' && pendingTasks > 0 ? ` <span class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${state.isTaskLocked ? 'bg-[#D97757] text-white' : 'bg-[#FDF0EB] text-[#D97757]'}">${pendingTasks}</span>` : ''}</button>
+              `).join('')}
+            </div>
+
+            <div class="p-4 max-h-[640px] overflow-y-auto">
+              ${state.rightTab === 'upnext' ? renderUpNext() : state.rightTab === 'discussion' ? renderDiscussion() : renderMicroTasks()}
+            </div>
+          </aside>
         </div>
+      </div>
 
-        <aside class="rounded-3xl bg-white border border-[#E8E2DA] overflow-hidden">
-          <div class="grid grid-cols-3 border-b border-[#E8E2DA] bg-[#FAF8F5]">
-            ${[
-              ['upnext', 'Up Next'],
-              ['discussion', 'Discussion'],
-              ['microtasks', 'Micro-Tasks']
-            ].map(([key, label]) => `
-              <button type="button" data-right-tab="${key}" class="py-3.5 text-xs font-extrabold border-b-2 transition-colors cursor-pointer ${state.rightTab === key ? 'border-[#D97757] text-[#D97757] bg-white' : 'border-transparent text-[#6B6560]'}">${label}${key === 'microtasks' && pendingTasks > 0 ? ` <span class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${state.isTaskLocked ? 'bg-[#D97757] text-white' : 'bg-[#FDF0EB] text-[#D97757]'}">${pendingTasks}</span>` : ''}</button>
-            `).join('')}
-          </div>
-
-          <div class="p-4 max-h-[640px] overflow-y-auto">
-            ${state.rightTab === 'upnext' ? renderUpNext() : state.rightTab === 'discussion' ? renderDiscussion() : renderMicroTasks()}
-          </div>
-        </aside>
+      <div class="cd-mobile-view">
+        ${renderMobileView(activeMod, hasModule, isCompleted, durationSec, pendingTasks)}
       </div>
 
       ${state.toastMsg ? `
@@ -605,7 +676,159 @@
     `;
 
     bindEvents(cid);
+    const mobVideo = document.getElementById('cdm-video-el');
+    if (mobVideo && isDirectVideoUrl(activeMod?.videoUrl)) {
+      const syncNative = () => {
+        if (Number.isFinite(mobVideo.duration) && mobVideo.duration > 0) {
+          mobVideo.currentTime = (state.videoProgress / 100) * mobVideo.duration;
+        }
+        if (state.playing) mobVideo.play?.().catch(() => {});
+        else mobVideo.pause?.();
+      };
+      if (mobVideo.readyState >= 1) syncNative();
+      else mobVideo.addEventListener?.('loadedmetadata', syncNative, { once: true });
+    }
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  function renderMobileView(activeMod, hasModule, isCompleted, durationSec, pendingTasks) {
+    const activeIdx = Math.max(0, state.courseModules.findIndex((m) => m.moduleId === state.currentModuleId));
+    const currentSec = (state.videoProgress / 100) * durationSec;
+    const markers = getMobileChapterMarkers();
+    const instructorOrRole = state.course.instructorName || state.course.instructor || window.getSession?.()?.roleName || 'Mentor Novastra';
+    const mobileTab = state.rightTab === 'microtasks' ? 'microtasks' : 'upnext';
+
+    return `
+      <section class="cdm-player" aria-label="Pemutar Video Modul">
+        <a href="/learn" class="cdm-back-btn" aria-label="Kembali ke Learn">
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </a>
+
+        ${isDirectVideoUrl(activeMod?.videoUrl) ? `
+          <video id="cdm-video-el" class="cdm-video-media" src="${esc(activeMod.videoUrl)}" playsinline preload="metadata"></video>
+        ` : `
+          <div class="cdm-poster cdm-thumb--${activeIdx % 4}">
+            <svg class="cdm-poster-art" viewBox="0 0 360 202" preserveAspectRatio="none" aria-hidden="true">
+              <circle cx="300" cy="40" r="78" fill="#FFFFFF" />
+              <circle cx="54" cy="176" r="88" fill="#FFFFFF" />
+              <path d="M26 52h140M26 76h92" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" />
+            </svg>
+            <div class="cdm-poster-scrim"></div>
+            <p class="cdm-poster-caption">${esc(activeMod?.title || state.course.title)}</p>
+          </div>
+        `}
+
+        <button type="button" id="cdm-play-center" class="cdm-play-center" aria-label="Play atau Pause">
+          <i data-lucide="${state.playing ? 'pause' : 'play'}" class="w-6 h-6"></i>
+        </button>
+
+        <div class="cdm-controls-overlay">
+          <div id="cdm-scrub-track" class="cdm-scrub-track" role="slider" aria-label="Progres Video" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(state.videoProgress)}">
+            <div class="cdm-scrub-rail">
+              <div id="cdm-scrub-fill" class="cdm-scrub-fill" style="width:${state.videoProgress}%"></div>
+              ${markers.map((m) => `
+                <button type="button" data-chapter-pct="${m.pct}" class="cdm-chapter-dot ${m.done ? 'is-done' : ''}" style="left:${m.pct}%" title="${esc(m.label)}" aria-label="${esc(m.label)}"></button>
+              `).join('')}
+              <span id="cdm-scrub-thumb" class="cdm-scrub-thumb" style="left:${state.videoProgress}%"></span>
+            </div>
+          </div>
+
+          <div class="cdm-time-row">
+            <span id="cdm-time-current">${formatTimeShort(currentSec)}</span>
+            <div class="cdm-time-right">
+              <button type="button" id="cdm-mark-complete" ${(!hasModule || state.completing) ? 'disabled' : ''} class="cdm-complete-btn ${isCompleted ? 'is-done' : ''}">
+                <i data-lucide="${isCompleted ? 'check' : 'check-circle-2'}" class="w-3 h-3"></i>
+                <span>${state.completing ? 'Menyimpan...' : !hasModule ? 'Kosong' : isCompleted ? 'Selesai ✓' : 'Selesai'}</span>
+              </button>
+              <span id="cdm-time-total">${formatTimeShort(durationSec)}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cdm-info-band">
+        <h1 class="cdm-module-title">${esc(activeMod?.title || state.course.title)}</h1>
+        <p class="cdm-module-meta">
+          Instructor: ${esc(instructorOrRole)} ·
+          <span id="cdm-remaining-text" class="cdm-remaining">${esc(formatRemainingLabel(durationSec, state.videoProgress))}</span>
+        </p>
+
+        ${state.isTaskLocked ? `
+          <div class="cdm-lock-banner">
+            <p class="cdm-lock-text">Checkpoint aktif: selesaikan Micro-Task untuk membuka lanjutan video.</p>
+            <button type="button" id="cdm-open-locked-task" class="cdm-lock-btn">Buka Tugas</button>
+          </div>
+        ` : ''}
+
+        <div class="cdm-tabs" role="tablist">
+          <button type="button" data-right-tab="upnext" class="cdm-tab-btn ${mobileTab === 'upnext' ? 'is-active' : ''}" role="tab" aria-selected="${mobileTab === 'upnext'}">Up Next</button>
+          <button type="button" data-right-tab="microtasks" class="cdm-tab-btn ${mobileTab === 'microtasks' ? 'is-active' : ''}" role="tab" aria-selected="${mobileTab === 'microtasks'}">
+            Micro-Tasks${pendingTasks > 0 ? `<span class="cdm-tab-badge">${pendingTasks}</span>` : ''}
+          </button>
+        </div>
+      </section>
+
+      <section class="cdm-body">
+        ${mobileTab === 'upnext' ? `
+          <p class="cdm-kicker">COMING UP IN THIS COURSE</p>
+          ${state.courseModules.length ? `
+            <div class="cdm-module-list">
+              ${state.courseModules.map((item, idx) => {
+                const itemId = item.moduleId;
+                const active = state.currentModuleId === itemId;
+                const done = isModuleDone(itemId);
+                const mins = Math.max(1, Math.round(Number(item.durationSeconds || 900) / 60));
+                return `
+                  <button type="button" data-lesson-id="${esc(itemId)}" class="cdm-module-card ${active ? 'is-active' : ''}">
+                    <div class="cdm-thumb cdm-thumb--${idx % 4}">
+                      <span class="cdm-thumb-badge ${done ? 'is-done' : ''}">
+                        <i data-lucide="${done ? 'check' : 'play'}" class="w-3.5 h-3.5"></i>
+                      </span>
+                    </div>
+                    <div class="cdm-mod-info">
+                      <h3 class="cdm-mod-title">${esc(item.title)}</h3>
+                      <p class="cdm-mod-dur">
+                        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                        <span>${mins} min</span>
+                      </p>
+                    </div>
+                    <i data-lucide="chevron-right" class="cdm-mod-chevron"></i>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          ` : '<p class="cdm-empty">Belum ada modul di database untuk course ini.</p>'}
+        ` : `
+          <p class="cdm-kicker">MICRO-TASKS · ${esc(activeMod?.title || state.course.title)}</p>
+          ${state.microTasks.length ? `
+            <div class="cdm-mt-list">
+              ${state.microTasks.map((mt, idx) => {
+                const done = Boolean(mt.isCompleted);
+                const ready = !done && state.videoProgress >= mt.triggerPct;
+                const pillText = done ? 'Selesai' : ready ? 'Perlu Dikerjakan' : 'Terkunci';
+                return `
+                  <article class="cdm-mt-card ${done ? 'is-done' : ready ? 'is-ready' : ''}">
+                    <div class="cdm-mt-top">
+                      <div>
+                        <p class="cdm-mt-meta">Checkpoint ${idx + 1} · Menit ${formatTimeShort(mt.timestampSeconds)}</p>
+                        <p class="cdm-mt-question">${esc(mt.questionText)}</p>
+                      </div>
+                      <span class="cdm-mt-pill ${done ? 'is-done' : ready ? 'is-ready' : ''}">${pillText}</span>
+                    </div>
+                    <div class="cdm-mt-foot">
+                      <span class="cdm-mt-sub">${done ? `Skor ${Math.round(Number(mt.score ?? 100))}` : ready ? 'Membuka kunci video' : `Terbuka di ${mt.triggerPct}%`}</span>
+                      <button type="button" data-mt-id="${esc(mt.taskId)}" class="cdm-mt-btn ${done ? 'is-done' : ''}">
+                        ${done ? 'Lihat / Perbarui' : 'Kerjakan / Submit'}
+                      </button>
+                    </div>
+                  </article>
+                `;
+              }).join('')}
+            </div>
+          ` : '<p class="cdm-empty">Belum ada Micro-Task untuk modul ini.</p>'}
+        `}
+      </section>
+    `;
   }
 
   function renderUpNext() {
@@ -809,32 +1032,30 @@
     };
     document.getElementById('cd-play-center')?.addEventListener('click', togglePlay);
     document.getElementById('cd-play-btn')?.addEventListener('click', togglePlay);
+    document.getElementById('cdm-play-center')?.addEventListener('click', togglePlay);
 
-    document.getElementById('cd-open-locked-task')?.addEventListener('click', () => {
+    const openLockedTask = () => {
       syncTaskLockState();
       state.activeMicroTask = state.lockedTask || findBlockingTask() || null;
       state.mtError = '';
       render();
-    });
+    };
+    document.getElementById('cd-open-locked-task')?.addEventListener('click', openLockedTask);
+    document.getElementById('cdm-open-locked-task')?.addEventListener('click', openLockedTask);
 
-    document.getElementById('cd-progress-track')?.addEventListener('click', (e) => {
+    const handleScrubClick = (e) => {
       const rect = e.currentTarget.getBoundingClientRect();
-      const targetPct = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
-      const blocker = findBlockingTask(targetPct);
-      if (blocker) {
-        lockPlayerOnTask(blocker);
-        return;
-      }
-      state.videoProgress = targetPct;
-      syncTaskLockState();
-      if (state.videoProgress >= 100) {
-        state.videoProgress = 100;
-        stopVideoPlayback();
-        updatePlayerProgressDom();
-        handleVideoCompleted();
-        return;
-      }
-      render();
+      if (!rect || !rect.width) return;
+      seekToProgress(((e.clientX - rect.left) / rect.width) * 100);
+    };
+    document.getElementById('cd-progress-track')?.addEventListener('click', handleScrubClick);
+    document.getElementById('cdm-scrub-track')?.addEventListener('click', handleScrubClick);
+
+    document.querySelectorAll('[data-chapter-pct]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        seekToProgress(Number(btn.dataset.chapterPct));
+      });
     });
 
     document.querySelectorAll('[data-speed]').forEach((btn) => {
@@ -854,9 +1075,11 @@
       render();
     });
 
-    document.getElementById('cd-mark-complete')?.addEventListener('click', () => {
+    const handleCompleteClick = () => {
       markModuleAsCompleted(state.currentModuleId, { auto: false });
-    });
+    };
+    document.getElementById('cd-mark-complete')?.addEventListener('click', handleCompleteClick);
+    document.getElementById('cdm-mark-complete')?.addEventListener('click', handleCompleteClick);
 
     document.getElementById('cd-toggle-overview')?.addEventListener('click', () => {
       state.overviewOpen = !state.overviewOpen;
@@ -873,7 +1096,12 @@
     document.querySelectorAll('[data-lesson-id]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const picked = state.courseModules.find((m) => m.moduleId === btn.dataset.lessonId);
-        if (picked) selectModule(picked, { autoPlay: false });
+        if (picked) {
+          if (window.matchMedia?.('(max-width: 768px)')?.matches) {
+            window.scrollTo?.({ top: 0, behavior: 'smooth' });
+          }
+          selectModule(picked, { autoPlay: false });
+        }
       });
     });
 
@@ -959,6 +1187,7 @@
     if (!session) return;
 
     const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'microtasks') state.rightTab = 'microtasks';
     const id = params.get('courseId') || params.get('id');
 
     if (!id) {
