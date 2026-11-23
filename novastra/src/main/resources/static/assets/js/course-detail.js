@@ -19,7 +19,7 @@
     volume: 80,
     ccOn: true,
     overviewOpen: true,
-    rightTab: 'upnext', // upnext | discussion | microtasks
+    rightTab: 'upnext', // upnext | microtasks
     activeMicroTask: null,
     microTasks: [],
     isTaskLocked: false,
@@ -33,26 +33,6 @@
     toastTimer: null,
     classroomOpen: false,
     handRaised: false,
-    discussions: [
-      {
-        id: 'd-1',
-        author: 'Nadia Kusuma',
-        time: '15 mnt lalu',
-        text: 'Apakah DTO validation lebih baik diletakkan di controller atau service layer?',
-        upvotes: 12,
-        replies: [
-          { author: 'Bima Santoso (Mentor)', time: '10 mnt lalu', text: 'Validasi format input (@Valid) di boundary controller, business invariant di service.' }
-        ]
-      },
-      {
-        id: 'd-2',
-        author: 'Bagas Permana',
-        time: '1 jam lalu',
-        text: 'Tips agar query list tetap cepat tanpa eager fetch di semua relasi?',
-        upvotes: 8,
-        replies: []
-      }
-    ],
     liveMessages: [
       { author: 'Mentor Bima', text: 'Selamat datang di Live Classroom Cohort #12! Siapkan repo Spring Boot Anda.' },
       { author: 'Rizky M.', text: 'Sudah ready Mas, tadi sempat coba @EntityGraph dan query turun ke 1x select.' }
@@ -630,10 +610,9 @@
           </div>
 
           <aside class="rounded-3xl bg-white border border-[#E8E2DA] overflow-hidden">
-            <div class="grid grid-cols-3 border-b border-[#E8E2DA] bg-[#FAF8F5]">
+            <div class="grid grid-cols-2 border-b border-[#E8E2DA] bg-[#FAF8F5]">
               ${[
                 ['upnext', 'Up Next'],
-                ['discussion', 'Discussion'],
                 ['microtasks', 'Micro-Tasks']
               ].map(([key, label]) => `
                 <button type="button" data-right-tab="${key}" class="py-3.5 text-xs font-extrabold border-b-2 transition-colors cursor-pointer ${state.rightTab === key ? 'border-[#D97757] text-[#D97757] bg-white' : 'border-transparent text-[#6B6560]'}">${label}${key === 'microtasks' && pendingTasks > 0 ? ` <span class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${state.isTaskLocked ? 'bg-[#D97757] text-white' : 'bg-[#FDF0EB] text-[#D97757]'}">${pendingTasks}</span>` : ''}</button>
@@ -641,7 +620,7 @@
             </div>
 
             <div class="p-4 max-h-[640px] overflow-y-auto">
-              ${state.rightTab === 'upnext' ? renderUpNext() : state.rightTab === 'discussion' ? renderDiscussion() : renderMicroTasks()}
+              ${state.rightTab === 'upnext' ? renderUpNext() : renderMicroTasks()}
             </div>
           </aside>
         </div>
@@ -842,44 +821,6 @@
     `;
   }
 
-  function renderDiscussion() {
-    return `
-      <form id="cd-disc-form" class="mb-4 space-y-2">
-        <textarea id="cd-disc-input" rows="2" placeholder="Ajukan pertanyaan atau catatan modul ini..." class="w-full p-3 rounded-xl bg-[#FAF8F5] border border-[#E8E2DA] text-xs focus:outline-none focus:border-[#D97757]"></textarea>
-        <button type="submit" class="px-3.5 py-2 rounded-xl bg-[#D97757] text-white text-xs font-extrabold cursor-pointer">Kirim Pertanyaan</button>
-      </form>
-      <div class="space-y-3">
-        ${state.discussions.map((d) => `
-          <div class="p-3.5 rounded-2xl bg-[#FAF8F5] border border-[#E8E2DA] space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-extrabold text-[#2C2A27]">${esc(d.author)}</span>
-              <span class="text-[11px] text-[#A89F98]">${esc(d.time)}</span>
-            </div>
-            <p class="text-xs text-[#2C2A27] leading-relaxed">${esc(d.text)}</p>
-            <div class="flex items-center gap-3">
-              <button type="button" data-upvote="${esc(d.id)}" class="text-[11px] font-extrabold text-[#D97757] cursor-pointer">▲ ${d.upvotes}</button>
-              <button type="button" data-reply-toggle="${esc(d.id)}" class="text-[11px] font-bold text-[#6B6560] hover:text-[#2C2A27] cursor-pointer">Balas (${d.replies.length})</button>
-            </div>
-            ${d.replies.length ? `
-              <div class="pl-3 border-l-2 border-[#E8E2DA] space-y-2 pt-1">
-                ${d.replies.map((r) => `
-                  <div class="p-2.5 rounded-xl bg-white border border-[#E8E2DA]">
-                    <p class="text-[11px] font-extrabold text-[#5E7C6B]">${esc(r.author)} · <span class="font-normal text-[#A89F98]">${esc(r.time)}</span></p>
-                    <p class="text-xs text-[#2C2A27] mt-0.5">${esc(r.text)}</p>
-                  </div>
-                `).join('')}
-              </div>
-            ` : ''}
-            <form data-reply-form="${esc(d.id)}" class="hidden flex gap-1.5 pt-1">
-              <input type="text" placeholder="Tulis balasan..." class="flex-1 px-2.5 py-1.5 rounded-lg bg-white border border-[#E8E2DA] text-xs focus:outline-none focus:border-[#D97757]" />
-              <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-[#D97757] text-white text-[11px] font-bold cursor-pointer">Kirim</button>
-            </form>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  }
-
   function renderMicroTasks() {
     if (!state.microTasks.length) {
       return '<p class="text-xs text-[#6B6560] py-6 text-center">Belum ada Micro-Task untuk modul ini.</p>';
@@ -1076,43 +1017,6 @@
             window.scrollTo?.({ top: 0, behavior: 'smooth' });
           }
           selectModule(picked, { autoPlay: false });
-        }
-      });
-    });
-
-    document.getElementById('cd-disc-form')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const input = document.getElementById('cd-disc-input');
-      const text = (input?.value || '').trim();
-      if (!text) return;
-      const name = window.NovastraStore?.getUser?.()?.name || 'Learner';
-      state.discussions.unshift({ id: `d-${Date.now()}`, author: name, time: 'Baru saja', text, upvotes: 1, replies: [] });
-      render();
-    });
-
-    document.querySelectorAll('[data-upvote]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const d = state.discussions.find((x) => x.id === btn.dataset.upvote);
-        if (d) { d.upvotes += 1; render(); }
-      });
-    });
-
-    document.querySelectorAll('[data-reply-toggle]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.querySelector(`[data-reply-form="${btn.dataset.replyToggle}"]`)?.classList.toggle('hidden');
-      });
-    });
-
-    document.querySelectorAll('[data-reply-form]').forEach((form) => {
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const text = (form.querySelector('input')?.value || '').trim();
-        if (!text) return;
-        const d = state.discussions.find((x) => x.id === form.dataset.replyForm);
-        const name = window.NovastraStore?.getUser?.()?.name || 'Learner';
-        if (d) {
-          d.replies.push({ author: name, time: 'Baru saja', text });
-          render();
         }
       });
     });
