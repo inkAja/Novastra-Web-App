@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface EnrollmentRepository extends JpaRepository<Enrollment, String> {
+    boolean existsByCourseId(String courseId);
     boolean existsByUserIdAndCourseId(String userId, String courseId);
     List<Enrollment> findByUserId(String userId);
     List<Enrollment> findByUserIdAndEnrolledAtBetween(String userId, LocalDate start, LocalDate end);

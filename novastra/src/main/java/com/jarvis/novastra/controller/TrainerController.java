@@ -22,4 +22,20 @@ public class TrainerController {
         }
         return "trainer-reviews";
     }
+
+    @GetMapping("/trainer/courses")
+    public String trainerCourses(HttpSession session) {
+        if (!TrainerReviewApiController.isTrainerAuthenticated(session)) {
+            return "redirect:/trainer/login";
+        }
+        return "trainer-courses";
+    }
+
+    @GetMapping("/trainer/projects")
+    public String trainerProjects(HttpSession session) {
+        if (!TrainerReviewApiController.isTrainerAuthenticated(session)) {
+            return "redirect:/trainer/login";
+        }
+        return "trainer-projects";
+    }
 }

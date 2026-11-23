@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novastra Admin — Kelola Target Proyek</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&amp;display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/css/trainer-reviews.css?v=3" />
+  <link rel="stylesheet" href="/css/trainer-projects.css?v=1" />
+</head>
+<body class="tr-page">
+  <div class="tr-workspace">
+    <header class="tr-topbar">
+      <div class="tr-topbar-left">
+        <div class="tr-brand-pill">
+          <span class="tr-brand-circle" aria-hidden="true">N</span>
+          <span class="tr-brand-label">Novastra Admin</span>
+        </div>
+        <div>
+          <h1 class="tr-page-title">Trainer Portal — Kelola Target Proyek</h1>
+          <p class="tr-page-sub">Atur daftar proyek portofolio (PORTOFOLIO_PROJECT) dan acuan Expected Output per course</p>
+        </div>
+      </div>
+
+      <div class="tr-topbar-right">
+        <div class="tr-trainer-chip">
+          <span class="tr-trainer-dot" aria-hidden="true"></span>
+          <span id="tr-trainer-name">Novastra Trainer</span>
+        </div>
+        <button type="button" id="tr-logout-btn" class="tr-btn-ghost">
+          <i data-lucide="log-out" class="tr-icon-sm"></i>
+          <span>Keluar (Logout)</span>
+        </button>
+      </div>
+    </header>
+
+    <nav class="tr-nav-tabs" aria-label="Navigasi Portal Trainer">
+      <a href="/trainer/submissions" class="tr-nav-tab">
+        <i data-lucide="clipboard-check" class="tr-icon-sm"></i>
+        <span>Penilaian Proyek</span>
+      </a>
+      <a href="/trainer/courses" class="tr-nav-tab">
+        <i data-lucide="book-open" class="tr-icon-sm"></i>
+        <span>Kelola Course &amp; Materi</span>
+      </a>
+      <a href="/trainer/projects" class="tr-nav-tab is-active" aria-current="page">
+        <i data-lucide="folder-kanban" class="tr-icon-sm"></i>
+        <span>Kelola Target Proyek</span>
+      </a>
+    </nav>
+
+    <div id="tp-alert" class="tr-alert tr-alert--error is-hidden" role="alert"></div>
+
+    <section class="tp-toolbar" aria-label="Filter dan Tambah Target Proyek">
+      <div class="tp-filter-wrap">
+        <label for="tp-course-filter" class="tp-filter-label">Filter Course Induk</label>
+        <select id="tp-course-filter" class="tp-select">
+          <option value="">Semua Course</option>
+        </select>
+        <span id="tp-count-pill" class="tp-count-pill">0 Proyek</span>
+      </div>
+
+      <div class="tp-toolbar-actions">
+        <button type="button" id="tp-refresh-btn" class="tr-btn-outline-sm">
+          <i data-lucide="refresh-cw" class="tr-icon-xs"></i>
+          <span>Refresh</span>
+        </button>
+        <button type="button" id="tp-add-btn" class="tp-btn-primary-sm">
+          <i data-lucide="plus" class="tr-icon-xs"></i>
+          <span>+ Tambah Proyek Tugas</span>
+        </button>
+      </div>
+    </section>
+
+    <main class="tr-table-card" aria-label="Daftar Target Proyek Tugas">
+      <div class="tr-table-wrap">
+        <table class="tr-table">
+          <thead>
+            <tr>
+              <th>Kode</th>
+              <th>Judul Proyek</th>
+              <th>Course Induk</th>
+              <th>Ringkasan Expected Output</th>
+              <th>Submisi Peserta</th>
+              <th class="tr-col-action">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tp-projects-tbody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Tambah / Edit Target Proyek -->
+  <div id="tp-form-modal" class="tr-modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="tp-fm-title">
+    <div class="tr-modal-card tp-form-card">
+      <div class="tr-modal-head">
+        <span id="tp-fm-badge" class="tr-modal-badge">Tambah Proyek Tugas</span>
+        <h3 id="tp-fm-title" class="tr-modal-title">Target Proyek Portofolio Baru</h3>
+        <p class="tr-modal-desc">Kode proyek (PJxxx) akan di-generate otomatis dan muncul di halaman Career peserta.</p>
+      </div>
+
+      <form id="tp-project-form" class="tp-modal-form" novalidate>
+        <div class="tr-field">
+          <label for="tp-f-course">Course Induk</label>
+          <select id="tp-f-course" class="tp-select tp-select-full" required></select>
+        </div>
+
+        <div class="tr-field">
+          <label for="tp-f-title">Judul Proyek (maks. 60 karakter)</label>
+          <input id="tp-f-title" type="text" maxlength="60" placeholder="Contoh: Type-Safe Component Dashboard" required />
+        </div>
+
+        <div class="tr-field">
+          <div class="tp-label-row">
+            <label for="tp-f-expected">Expected Output / Kriteria Penilaian</label>
+            <span id="tp-char-counter" class="tp-char-counter">0 / 255</span>
+          </div>
+          <textarea id="tp-f-expected" rows="5" maxlength="255" placeholder="Tujuan Proyek: ...&#10;Kriteria Wajib:&#10;- ...&#10;- ...&#10;Format Pengumpulan: ..." required></textarea>
+        </div>
+
+        <div id="tp-fm-error" class="tr-alert tr-alert--error is-hidden" role="alert"></div>
+
+        <div class="tr-modal-actions">
+          <button type="button" id="tp-fm-cancel" class="tr-btn-ghost">Batal</button>
+          <button type="submit" class="tr-btn-primary tp-btn-auto">Lanjut ke Konfirmasi →</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Simpan / Hapus -->
+  <div id="tp-confirm-modal" class="tr-modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="tp-cf-title">
+    <div class="tr-modal-card">
+      <div class="tr-modal-head">
+        <span id="tp-cf-badge" class="tr-modal-badge">Konfirmasi Aksi</span>
+        <h3 id="tp-cf-title" class="tr-modal-title">Konfirmasi perubahan target proyek</h3>
+        <p id="tp-cf-desc" class="tr-modal-desc">Pastikan data berikut sudah sesuai sebelum disimpan ke database.</p>
+      </div>
+
+      <div id="tp-cf-summary" class="tr-confirm-summary"></div>
+
+      <div class="tr-modal-actions">
+        <button type="button" id="tp-cf-cancel" class="tr-btn-ghost">Batal</button>
+        <button type="button" id="tp-cf-submit" class="tr-btn-primary tp-btn-auto">
+          <i data-lucide="check" class="tr-icon-sm"></i>
+          <span id="tp-cf-btn-label">Ya, Lanjutkan</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifikasi -->
+  <div id="tp-toast" class="tr-toast is-hidden" role="status" aria-live="polite">
+    <span class="tr-toast-dot" aria-hidden="true"></span>
+    <span id="tp-toast-text">Target proyek berhasil disimpan.</span>
+  </div>
+
+  <script src="/js/trainer-projects.js?v=1"></script>
+</body>
+</html>

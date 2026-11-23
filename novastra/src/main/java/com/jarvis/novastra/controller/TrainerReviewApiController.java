@@ -135,7 +135,7 @@ public class TrainerReviewApiController {
         return session != null && session.getAttribute(SESSION_EMAIL_KEY) != null;
     }
 
-    private static ResponseEntity<Map<String, String>> unauthorizedResponse() {
+    static ResponseEntity<Map<String, String>> unauthorizedResponse() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Map.of("message", "Autentikasi Trainer diperlukan untuk mengakses halaman ini."));
     }

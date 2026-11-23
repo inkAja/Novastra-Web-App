@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&amp;display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/css/trainer-reviews.css?v=2" />
+  <link rel="stylesheet" href="/css/trainer-reviews.css?v=3" />
 </head>
 <body class="tr-page">
   <!-- Workspace Desktop Trainer -->
@@ -36,6 +36,21 @@
         </button>
       </div>
     </header>
+
+    <nav class="tr-nav-tabs" aria-label="Navigasi Portal Trainer">
+      <a href="/trainer/submissions" class="tr-nav-tab is-active" aria-current="page">
+        <i data-lucide="clipboard-check" class="tr-icon-sm"></i>
+        <span>Penilaian Proyek</span>
+      </a>
+      <a href="/trainer/courses" class="tr-nav-tab">
+        <i data-lucide="book-open" class="tr-icon-sm"></i>
+        <span>Kelola Course &amp; Materi</span>
+      </a>
+      <a href="/trainer/projects" class="tr-nav-tab">
+        <i data-lucide="folder-kanban" class="tr-icon-sm"></i>
+        <span>Kelola Target Proyek</span>
+      </a>
+    </nav>
 
     <!-- 4 Summary KPI Cards -->
     <section class="tr-stats-grid" aria-label="Ringkasan Statistik Submisi">

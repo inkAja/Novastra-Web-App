@@ -1380,4 +1380,136 @@ class NovastraApplicationTests {
 				.andExpect(redirectedUrl("/trainer/login"));
 	}
 
+	@Test
+	@Transactional
+	void trainerContentCrudValidationConflictAndLearnerVisibilityFlow() throws Exception {
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+
+		// 1. Unauthenticated requests to Phase 2 pages & APIs are rejected
+		mockMvc.perform(get("/trainer/courses")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/trainer/login"));
+		mockMvc.perform(get("/trainer/projects")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/trainer/login"));
+		mockMvc.perform(get("/api/trainer/courses")).andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/trainer/projects")).andExpect(status().isUnauthorized());
+
+		org.springframework.mock.web.MockHttpSession trainerSession =
+				(org.springframework.mock.web.MockHttpSession) mockMvc.perform(post("/api/trainer/login")
+								.contentType(MediaType.APPLICATION_JSON)
+								.content("{\"email\":\"trainer@novastra.id\",\"password\":\"trainer123\"}"))
+						.andExpect(status().isOk())
+						.andReturn()
+						.getRequest()
+						.getSession(false);
+
+		mockMvc.perform(get("/trainer/courses").session(trainerSession)).andExpect(status().isOk());
+		mockMvc.perform(get("/trainer/projects").session(trainerSession)).andExpect(status().isOk());
+
+		// 2. Create Course with auto-generated ID, then validate 400 on bad payload & update Course
+		mockMvc.perform(post("/api/trainer/courses")
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"title\":\"\",\"typeCourse\":\"Full-Stack Web Developer\",\"instructorName\":\"Budi\",\"duration\":0}"))
+				.andExpect(status().isBadRequest());
+
+		mockMvc.perform(post("/api/trainer/courses")
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"title\":\"Modern GraphQL APIs\",\"typeCourse\":\"Full-Stack Web Developer\",\"instructorName\":\"Elena Vance\",\"duration\":120}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.course.courseId").value(org.hamcrest.Matchers.startsWith("CS")));
+		String newCourseId = courseRepository.findTopByCourseIdStartingWithOrderByCourseIdDesc("CS")
+				.orElseThrow().getCourseId();
+
+		mockMvc.perform(put("/api/trainer/courses/{id}", newCourseId)
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"title\":\"Modern GraphQL & Edge APIs\",\"typeCourse\":\"Full-Stack Web Developer\",\"instructorName\":\"Elena Vance\",\"duration\":150}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.course.title").value("Modern GraphQL & Edge APIs"));
+
+		// 3. Module validation (400), create (auto MD ID), update, and ordered fetch
+		mockMvc.perform(post("/api/trainer/courses/{id}/modules", newCourseId)
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"title\":\"Intro\",\"videoUrl\":\"ftp://bad\",\"durationSeconds\":0,\"sequenceOrder\":0}"))
+				.andExpect(status().isBadRequest());
+
+		mockMvc.perform(post("/api/trainer/courses/{id}/modules", newCourseId)
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"title\":\"Schema Design & Resolvers\",\"videoUrl\":\"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\"durationSeconds\":540,\"sequenceOrder\":1}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.module.moduleId").value(org.hamcrest.Matchers.startsWith("MD")));
+		String newModuleId = courseModuleRepository.findByCourseIdOrderBySequenceOrderAsc(newCourseId)
+				.get(0).getModuleId();
+
+		mockMvc.perform(put("/api/trainer/modules/{id}", newModuleId)
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"title\":\"Schema Design & Subscriptions\",\"videoUrl\":\"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\"durationSeconds\":600,\"sequenceOrder\":1}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.module.durationSeconds").value(600));
+
+		mockMvc.perform(get("/api/trainer/courses/{id}/modules", newCourseId).session(trainerSession))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.modules.length()").value(1))
+				.andExpect(jsonPath("$.modules[0].moduleId").value(newModuleId));
+
+		// 4. Create & update Target Portfolio Project under newCourseId
+		mockMvc.perform(post("/api/trainer/projects")
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"courseId\":\"" + newCourseId + "\",\"title\":\"GraphQL Commerce Gateway\",\"expectedOutput\":\"Tujuan Proyek: Bangun GraphQL gateway.\\nKriteria Wajib:\\n- Query & Mutation\\n- Auth guard\\n- Unit test\\nFormat Pengumpulan: GitHub\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.project.projectId").value(org.hamcrest.Matchers.startsWith("PJ")));
+		String newProjectId = portfolioProjectRepository.findByCourseIdOrderByProjectIdAsc(newCourseId)
+				.get(0).getProjectId();
+
+		mockMvc.perform(put("/api/trainer/projects/{id}", newProjectId)
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"courseId\":\"" + newCourseId + "\",\"title\":\"GraphQL Edge Gateway\",\"expectedOutput\":\"Tujuan Proyek: Bangun GraphQL gateway.\\nKriteria Wajib:\\n- Query & Mutation\\n- Auth guard\\n- Unit test\\nFormat Pengumpulan: GitHub Repo\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.project.title").value("GraphQL Edge Gateway"));
+
+		// 5. Conflict (409) guards: cannot delete Course while Module/Project exist; cannot delete Module with MicroTask; cannot delete Project with Submission
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/trainer/courses/{id}", newCourseId)
+						.session(trainerSession))
+				.andExpect(status().isConflict());
+
+		PortfolioSubmission seededSub = portfolioSubmissionRepository.findAll().get(0);
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/trainer/projects/{id}", seededSub.getProjectId().trim())
+						.session(trainerSession))
+				.andExpect(status().isConflict());
+
+		com.jarvis.novastra.entity.MicroTask seededTask = microTaskRepository.findAll().get(0);
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/trainer/modules/{id}", seededTask.getModuleId().trim())
+						.session(trainerSession))
+				.andExpect(status().isConflict());
+
+		// 6. Learner visibility check: new Course shows on /api/courses/workspace & new Project shows on /api/career/{uid}
+		User learner = authService.register("Phase2 Learner Check", "phase2.check@novastra.id", "secret123");
+		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
+		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
+		onboardingService.saveOnboarding(learner.getUserId(), role.getRoleId(), 30, 1, List.of(roleSkills.get(0).getSkillId()));
+
+		mockMvc.perform(get("/api/courses/workspace").param("userId", learner.getUserId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.courses[?(@.courseId == '" + newCourseId + "')].title").value("Modern GraphQL & Edge APIs"));
+
+		mockMvc.perform(get("/api/career/{userId}", learner.getUserId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.portfolioProjects[?(@.projectId == '" + newProjectId + "')].title").value("GraphQL Edge Gateway"));
+
+		// 7. Reverse-order deletion succeeds once dependencies are removed
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/trainer/projects/{id}", newProjectId)
+						.session(trainerSession))
+				.andExpect(status().isOk());
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/trainer/modules/{id}", newModuleId)
+						.session(trainerSession))
+				.andExpect(status().isOk());
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/trainer/courses/{id}", newCourseId)
+						.session(trainerSession))
+				.andExpect(status().isOk());
+	}
+
 }

@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MicroTaskRepository extends JpaRepository<MicroTask, String> {
+    boolean existsByModuleId(String moduleId);
     boolean existsByModuleIdAndQuestionText(String moduleId, String questionText);
     boolean existsByModuleIdAndTimestampSeconds(String moduleId, Integer timestampSeconds);
     List<MicroTask> findByModuleIdIn(Collection<String> moduleIds);

@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PortfolioSubmissionRepository extends JpaRepository<PortfolioSubmission, String> {
+    boolean existsByProjectId(String projectId);
     List<PortfolioSubmission> findByUserId(String userId);
     List<PortfolioSubmission> findByUserIdAndProjectIdIn(String userId, Collection<String> projectIds);
     Optional<PortfolioSubmission> findFirstByUserIdAndProjectIdOrderBySubmissionIdAsc(String userId, String projectId);

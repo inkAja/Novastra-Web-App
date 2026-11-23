@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novastra Admin — Kelola Course &amp; Materi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&amp;display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/css/trainer-reviews.css?v=3" />
+  <link rel="stylesheet" href="/css/trainer-courses.css?v=1" />
+</head>
+<body class="tr-page">
+  <div class="tr-workspace">
+    <header class="tr-topbar">
+      <div class="tr-topbar-left">
+        <div class="tr-brand-pill">
+          <span class="tr-brand-circle" aria-hidden="true">N</span>
+          <span class="tr-brand-label">Novastra Admin</span>
+        </div>
+        <div>
+          <h1 class="tr-page-title">Trainer Portal — Kelola Course &amp; Materi Video</h1>
+          <p class="tr-page-sub">Kelola daftar course, urutan materi video pembelajaran, dan durasi setiap modul</p>
+        </div>
+      </div>
+
+      <div class="tr-topbar-right">
+        <div class="tr-trainer-chip">
+          <span class="tr-trainer-dot" aria-hidden="true"></span>
+          <span id="tr-trainer-name">Novastra Trainer</span>
+        </div>
+        <button type="button" id="tr-logout-btn" class="tr-btn-ghost">
+          <i data-lucide="log-out" class="tr-icon-sm"></i>
+          <span>Keluar (Logout)</span>
+        </button>
+      </div>
+    </header>
+
+    <nav class="tr-nav-tabs" aria-label="Navigasi Portal Trainer">
+      <a href="/trainer/submissions" class="tr-nav-tab">
+        <i data-lucide="clipboard-check" class="tr-icon-sm"></i>
+        <span>Penilaian Proyek</span>
+      </a>
+      <a href="/trainer/courses" class="tr-nav-tab is-active" aria-current="page">
+        <i data-lucide="book-open" class="tr-icon-sm"></i>
+        <span>Kelola Course &amp; Materi</span>
+      </a>
+      <a href="/trainer/projects" class="tr-nav-tab">
+        <i data-lucide="folder-kanban" class="tr-icon-sm"></i>
+        <span>Kelola Target Proyek</span>
+      </a>
+    </nav>
+
+    <div id="tc-alert" class="tr-alert tr-alert--error is-hidden" role="alert"></div>
+
+    <!-- Master-Detail 2 Kolom Desktop -->
+    <main class="tc-split-grid">
+      <!-- Panel Kiri: Daftar Course -->
+      <section class="tr-table-card" aria-label="Daftar Course">
+        <div class="tr-card-header">
+          <div>
+            <h2 class="tr-card-title">Daftar Course</h2>
+            <p id="tc-course-sub" class="tr-card-sub">Memuat daftar course...</p>
+          </div>
+          <button type="button" id="tc-add-course-btn" class="tc-btn-primary-sm">
+            <i data-lucide="plus" class="tr-icon-xs"></i>
+            <span>+ Tambah Course</span>
+          </button>
+        </div>
+
+        <label class="tc-search-box">
+          <i data-lucide="search" class="tr-icon-sm tr-search-icon"></i>
+          <input id="tc-course-search" type="search" autocomplete="off" placeholder="Cari kode, judul course, role, atau instruktur..." />
+        </label>
+
+        <div id="tc-course-list" class="tc-course-list"></div>
+      </section>
+
+      <!-- Panel Kanan: Daftar Materi / Modul Video -->
+      <section class="tr-table-card" aria-label="Daftar Materi Video Course Terpilih">
+        <div class="tr-card-header">
+          <div>
+            <div class="tc-module-kicker-row">
+              <span id="tc-selected-id" class="tr-id-tag is-hidden">CS001</span>
+              <span id="tc-selected-role" class="tc-role-tag is-hidden">Role</span>
+            </div>
+            <h2 id="tc-module-title" class="tr-card-title">Pilih Course di Sebelah Kiri</h2>
+            <p id="tc-module-sub" class="tr-card-sub">Klik salah satu course untuk melihat, menambah, atau mengubah materi videonya.</p>
+          </div>
+          <button type="button" id="tc-add-module-btn" class="tc-btn-primary-sm" disabled>
+            <i data-lucide="plus" class="tr-icon-xs"></i>
+            <span>+ Tambah Materi</span>
+          </button>
+        </div>
+
+        <div id="tc-module-empty" class="tc-empty-box">
+          <i data-lucide="video" class="tr-icon-lg"></i>
+          <h3>Belum ada course terpilih</h3>
+          <p>Pilih course dari panel kiri untuk mengelola urutan materi modul.</p>
+        </div>
+
+        <div id="tc-module-wrap" class="tr-table-wrap is-hidden">
+          <table class="tr-table">
+            <thead>
+              <tr>
+                <th>Urut</th>
+                <th>Kode</th>
+                <th>Judul Materi</th>
+                <th>Pratinjau Video</th>
+                <th>Durasi</th>
+                <th class="tr-col-action">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tc-modules-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal Tambah / Edit Course -->
+  <div id="tc-course-modal" class="tr-modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="tc-cm-title">
+    <div class="tr-modal-card tc-form-modal">
+      <div class="tr-modal-head">
+        <span id="tc-cm-badge" class="tr-modal-badge">Tambah Course</span>
+        <h3 id="tc-cm-title" class="tr-modal-title">Data Course Baru</h3>
+        <p class="tr-modal-desc">ID Course akan dibuat otomatis oleh sistem (format CSxxx).</p>
+      </div>
+
+      <form id="tc-course-form" class="tc-modal-form" novalidate>
+        <div class="tr-field">
+          <label for="tc-f-title">Judul Course</label>
+          <input id="tc-f-title" type="text" maxlength="255" placeholder="Contoh: Modern TypeScript & Architecture" required />
+        </div>
+
+        <div class="tc-form-grid-2">
+          <div class="tr-field">
+            <label for="tc-f-role">Kategori / Career Role</label>
+            <input id="tc-f-role" type="text" maxlength="60" list="tc-role-datalist" placeholder="Full-Stack Web Developer" required />
+            <datalist id="tc-role-datalist"></datalist>
+          </div>
+          <div class="tr-field">
+            <label for="tc-f-duration">Total Durasi (menit)</label>
+            <input id="tc-f-duration" type="number" min="1" step="1" placeholder="180" required />
+          </div>
+        </div>
+
+        <div class="tr-field">
+          <label for="tc-f-instructor">Nama Instruktur</label>
+          <input id="tc-f-instructor" type="text" maxlength="255" placeholder="Contoh: Elena Vance" required />
+        </div>
+
+        <div id="tc-cm-error" class="tr-alert tr-alert--error is-hidden" role="alert"></div>
+
+        <div class="tr-modal-actions">
+          <button type="button" id="tc-cm-cancel" class="tr-btn-ghost">Batal</button>
+          <button type="submit" class="tr-btn-primary tc-btn-auto">Lanjut ke Konfirmasi →</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Tambah / Edit Materi Modul -->
+  <div id="tc-module-modal" class="tr-modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="tc-mm-title">
+    <div class="tr-modal-card tc-form-modal">
+      <div class="tr-modal-head">
+        <span id="tc-mm-badge" class="tr-modal-badge">Tambah Materi</span>
+        <h3 id="tc-mm-title" class="tr-modal-title">Materi Video Baru</h3>
+        <p id="tc-mm-course-note" class="tr-modal-desc">Course induk: -</p>
+      </div>
+
+      <form id="tc-module-form" class="tc-modal-form" novalidate>
+        <div class="tr-field">
+          <label for="tc-m-title">Judul Materi</label>
+          <input id="tc-m-title" type="text" maxlength="255" placeholder="Contoh: Pengenalan Type Safety & Generics" required />
+        </div>
+
+        <div class="tr-field">
+          <label for="tc-m-video">URL Video Materi</label>
+          <input id="tc-m-video" type="url" maxlength="255" placeholder="https://www.youtube.com/watch?v=..." required />
+        </div>
+
+        <div class="tc-form-grid-2">
+          <div class="tr-field">
+            <label for="tc-m-duration">Durasi Video (detik)</label>
+            <input id="tc-m-duration" type="number" min="1" step="1" placeholder="540" required />
+            <span id="tc-m-duration-hint" class="tr-field-hint">Format terbaca: -</span>
+          </div>
+          <div class="tr-field">
+            <label for="tc-m-seq">Urutan (Sequence Order)</label>
+            <input id="tc-m-seq" type="number" min="1" step="1" placeholder="1" required />
+          </div>
+        </div>
+
+        <div id="tc-mm-error" class="tr-alert tr-alert--error is-hidden" role="alert"></div>
+
+        <div class="tr-modal-actions">
+          <button type="button" id="tc-mm-cancel" class="tr-btn-ghost">Batal</button>
+          <button type="submit" class="tr-btn-primary tc-btn-auto">Lanjut ke Konfirmasi →</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Simpan / Hapus (Activity Diagram Guard) -->
+  <div id="tc-confirm-modal" class="tr-modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="tc-cf-title">
+    <div class="tr-modal-card">
+      <div class="tr-modal-head">
+        <span id="tc-cf-badge" class="tr-modal-badge">Konfirmasi Aksi</span>
+        <h3 id="tc-cf-title" class="tr-modal-title">Konfirmasi perubahan data</h3>
+        <p id="tc-cf-desc" class="tr-modal-desc">Pastikan rincian berikut sudah sesuai sebelum diproses ke database.</p>
+      </div>
+
+      <div id="tc-cf-summary" class="tr-confirm-summary"></div>
+
+      <div class="tr-modal-actions">
+        <button type="button" id="tc-cf-cancel" class="tr-btn-ghost">Batal</button>
+        <button type="button" id="tc-cf-submit" class="tr-btn-primary tc-btn-auto">
+          <i data-lucide="check" class="tr-icon-sm"></i>
+          <span id="tc-cf-btn-label">Ya, Lanjutkan</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifikasi -->
+  <div id="tc-toast" class="tr-toast is-hidden" role="status" aria-live="polite">
+    <span class="tr-toast-dot" aria-hidden="true"></span>
+    <span id="tc-toast-text">Perubahan berhasil disimpan.</span>
+  </div>
+
+  <script src="/js/trainer-courses.js?v=1"></script>
+</body>
+</html>
