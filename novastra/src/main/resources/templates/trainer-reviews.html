@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novastra — Trainer Review Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&amp;display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/css/trainer-reviews.css?v=2" />
+</head>
+<body class="tr-page">
+  <!-- Workspace Desktop Trainer -->
+  <div id="tr-workspace" class="tr-workspace">
+    <header class="tr-topbar">
+      <div class="tr-topbar-left">
+        <div class="tr-brand-pill">
+          <span class="tr-brand-circle" aria-hidden="true">N</span>
+          <span class="tr-brand-label">Novastra</span>
+        </div>
+        <div>
+          <h1 class="tr-page-title">Trainer Review Portal — Penilaian Proyek</h1>
+          <p class="tr-page-sub">Evaluasi submisi proyek portofolio peserta berdasarkan rubrik Expected Output</p>
+        </div>
+      </div>
+
+      <div class="tr-topbar-right">
+        <div class="tr-trainer-chip">
+          <span class="tr-trainer-dot" aria-hidden="true"></span>
+          <span id="tr-trainer-name">Novastra Trainer</span>
+        </div>
+        <button type="button" id="tr-logout-btn" class="tr-btn-ghost">
+          <i data-lucide="log-out" class="tr-icon-sm"></i>
+          <span>Keluar (Logout)</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 4 Summary KPI Cards -->
+    <section class="tr-stats-grid" aria-label="Ringkasan Statistik Submisi">
+      <article class="tr-stat-card">
+        <div class="tr-stat-head">
+          <span class="tr-stat-label">Total Submisi</span>
+          <span class="tr-stat-icon tr-stat-icon--neutral"><i data-lucide="folder-kanban" class="tr-icon-sm"></i></span>
+        </div>
+        <p id="stat-total" class="tr-stat-val">0</p>
+      </article>
+
+      <article class="tr-stat-card">
+        <div class="tr-stat-head">
+          <span class="tr-stat-label">Menunggu Review</span>
+          <span class="tr-stat-icon tr-stat-icon--pending"><i data-lucide="clock" class="tr-icon-sm"></i></span>
+        </div>
+        <p id="stat-pending" class="tr-stat-val tr-stat-val--pending">0</p>
+      </article>
+
+      <article class="tr-stat-card">
+        <div class="tr-stat-head">
+          <span class="tr-stat-label">Terverifikasi</span>
+          <span class="tr-stat-icon tr-stat-icon--verified"><i data-lucide="check-circle-2" class="tr-icon-sm"></i></span>
+        </div>
+        <p id="stat-verified" class="tr-stat-val tr-stat-val--verified">0</p>
+      </article>
+
+      <article class="tr-stat-card">
+        <div class="tr-stat-head">
+          <span class="tr-stat-label">Ditolak / Revisi</span>
+          <span class="tr-stat-icon tr-stat-icon--rejected"><i data-lucide="alert-circle" class="tr-icon-sm"></i></span>
+        </div>
+        <p id="stat-rejected" class="tr-stat-val tr-stat-val--rejected">0</p>
+      </article>
+    </section>
+
+    <!-- Filter & Search Toolbar -->
+    <section class="tr-toolbar" aria-label="Filter dan Pencarian Submisi">
+      <div class="tr-filter-chips" role="tablist" aria-label="Filter Status">
+        <button type="button" data-status-filter="ALL" class="tr-chip is-active" role="tab" aria-selected="true">Semua</button>
+        <button type="button" data-status-filter="PENDING" class="tr-chip" role="tab" aria-selected="false">Pending</button>
+        <button type="button" data-status-filter="VERIFIED" class="tr-chip" role="tab" aria-selected="false">Verified</button>
+        <button type="button" data-status-filter="REJECTED" class="tr-chip" role="tab" aria-selected="false">Rejected</button>
+      </div>
+
+      <label class="tr-search-box">
+        <i data-lucide="search" class="tr-icon-sm tr-search-icon"></i>
+        <input id="tr-search-input" type="search" autocomplete="off" placeholder="Cari nama peserta, judul proyek, atau nama course..." />
+      </label>
+    </section>
+
+    <!-- Split Workspace: Left Table + Right Sticky Grading Panel -->
+    <main class="tr-split-grid">
+      <section class="tr-table-card" aria-label="Daftar Submisi Peserta">
+        <div class="tr-card-header">
+          <div>
+            <h2 class="tr-card-title">Daftar Submisi Peserta</h2>
+            <p id="tr-table-subtitle" class="tr-card-sub">Memuat daftar submisi...</p>
+          </div>
+          <button type="button" id="tr-refresh-btn" class="tr-btn-outline-sm">
+            <i data-lucide="refresh-cw" class="tr-icon-xs"></i>
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        <div id="tr-table-error" class="tr-alert tr-alert--error is-hidden" role="alert"></div>
+
+        <div class="tr-table-wrap">
+          <table class="tr-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nama Peserta</th>
+                <th>Judul Proyek &amp; Course</th>
+                <th>Status</th>
+                <th>Skor</th>
+                <th class="tr-col-action">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tr-submissions-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="tr-review-drawer" aria-label="Panel Review &amp; Penilaian">
+        <div id="tr-detail-empty" class="tr-drawer-empty">
+          <div class="tr-drawer-empty-icon">
+            <i data-lucide="clipboard-check" class="tr-icon-lg"></i>
+          </div>
+          <h3>Pilih Submisi untuk Direview</h3>
+          <p>Klik tombol <strong>Review</strong> pada salah satu baris peserta di sebelah kiri untuk membuka tautan karya, Expected Output, dan form penilaian.</p>
+        </div>
+
+        <div id="tr-detail-content" class="tr-drawer-body is-hidden">
+          <div class="tr-drawer-head">
+            <div>
+              <span id="tr-detail-id" class="tr-id-tag">SB01</span>
+              <h2 id="tr-detail-project" class="tr-drawer-title">Judul Proyek</h2>
+              <p id="tr-detail-course" class="tr-drawer-course">Nama Course</p>
+            </div>
+            <span id="tr-detail-status-badge" class="tr-badge tr-badge--pending">PENDING</span>
+          </div>
+
+          <div class="tr-learner-box">
+            <div>
+              <p class="tr-meta-kicker">PESERTA</p>
+              <p id="tr-detail-learner" class="tr-learner-name">Nama Peserta</p>
+              <p id="tr-detail-email" class="tr-learner-email">email@novastra.id</p>
+            </div>
+            <a id="tr-detail-link" href="#" target="_blank" rel="noopener noreferrer" class="tr-btn-link">
+              <span>Buka Tautan Karya</span>
+              <i data-lucide="external-link" class="tr-icon-xs"></i>
+            </a>
+          </div>
+
+          <div class="tr-expected-box">
+            <p class="tr-meta-kicker">EXPECTED OUTPUT PROYEK (ACUAN PENILAIAN)</p>
+            <div id="tr-detail-expected" class="tr-expected-body"></div>
+          </div>
+
+          <form id="tr-review-form" class="tr-review-form" novalidate>
+            <div class="tr-form-row">
+              <div class="tr-field">
+                <label for="tr-score-input">Skor Penilaian (0 – 100)</label>
+                <input id="tr-score-input" type="number" min="0" max="100" step="1" placeholder="85" required />
+              </div>
+
+              <div class="tr-field">
+                <span class="tr-label">Keputusan Status</span>
+                <div class="tr-decision-group">
+                  <label class="tr-radio-card tr-radio-card--verified">
+                    <input type="radio" name="tr-decision" value="VERIFIED" checked />
+                    <span>Setujui / Verified</span>
+                  </label>
+                  <label class="tr-radio-card tr-radio-card--rejected">
+                    <input type="radio" name="tr-decision" value="REJECTED" />
+                    <span>Tolak / Revisi</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="tr-field">
+              <label for="tr-feedback-input">Catatan Feedback (<code>feedback_notes</code>)</label>
+              <textarea id="tr-feedback-input" rows="4" placeholder="Tuliskan catatan kekuatan karya atau poin revisi yang diperlukan peserta..."></textarea>
+              <p class="tr-field-hint">Wajib diisi apabila memilih keputusan <strong>Tolak / Revisi</strong>.</p>
+            </div>
+
+            <div id="tr-form-error" class="tr-alert tr-alert--error is-hidden" role="alert"></div>
+
+            <button type="submit" id="tr-submit-btn" class="tr-btn-primary">
+              <i data-lucide="check-square" class="tr-icon-sm"></i>
+              <span>Simpan Penilaian</span>
+            </button>
+          </form>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Modal Konfirmasi Simpan Penilaian -->
+  <div id="tr-confirm-modal" class="tr-modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="tr-confirm-title">
+    <div class="tr-modal-card">
+      <div class="tr-modal-head">
+        <span class="tr-modal-badge">Konfirmasi Penilaian</span>
+        <h3 id="tr-confirm-title" class="tr-modal-title">Konfirmasi aksi yang dilakukan</h3>
+        <p class="tr-modal-desc">Pastikan skor dan keputusan status berikut sudah sesuai sebelum disimpan ke database.</p>
+      </div>
+
+      <div class="tr-confirm-summary">
+        <div class="tr-confirm-row">
+          <span>ID Submisi</span>
+          <strong id="tr-cf-id">-</strong>
+        </div>
+        <div class="tr-confirm-row">
+          <span>Nama Peserta</span>
+          <strong id="tr-cf-learner">-</strong>
+        </div>
+        <div class="tr-confirm-row">
+          <span>Proyek</span>
+          <strong id="tr-cf-project">-</strong>
+        </div>
+        <div class="tr-confirm-row">
+          <span>Skor Diberikan</span>
+          <strong id="tr-cf-score">0 / 100</strong>
+        </div>
+        <div class="tr-confirm-row">
+          <span>Keputusan Status</span>
+          <strong id="tr-cf-status">VERIFIED</strong>
+        </div>
+        <div class="tr-confirm-feedback">
+          <span>Catatan Feedback:</span>
+          <p id="tr-cf-feedback">-</p>
+        </div>
+      </div>
+
+      <div class="tr-modal-actions">
+        <button type="button" id="tr-confirm-cancel" class="tr-btn-ghost">Batal</button>
+        <button type="button" id="tr-confirm-submit" class="tr-btn-primary">
+          <i data-lucide="save" class="tr-icon-sm"></i>
+          <span>Ya, Simpan Penilaian</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifikasi -->
+  <div id="tr-toast" class="tr-toast is-hidden" role="status" aria-live="polite">
+    <span class="tr-toast-dot" aria-hidden="true"></span>
+    <span id="tr-toast-text">Penilaian berhasil disimpan.</span>
+  </div>
+
+  <script src="/js/trainer-reviews.js?v=2"></script>
+</body>
+</html>

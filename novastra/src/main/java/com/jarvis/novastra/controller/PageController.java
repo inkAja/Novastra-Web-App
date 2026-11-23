@@ -1,5 +1,6 @@
 package com.jarvis.novastra.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
@@ -7,7 +8,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class PageController {
 
     @GetMapping("/")
-    public String index() {
+    public String index(HttpServletRequest request) {
+        String host = request.getServerName();
+        if ("localhost".equalsIgnoreCase(host)
+                || "127.0.0.1".equals(host)
+                || "::1".equals(host)
+                || "0:0:0:0:0:0:0:1".equals(host)) {
+            return "redirect:/trainer/login";
+        }
         return "index";
     }
 

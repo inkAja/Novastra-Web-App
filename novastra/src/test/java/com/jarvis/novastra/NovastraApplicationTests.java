@@ -54,7 +54,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -1165,6 +1168,136 @@ class NovastraApplicationTests {
 				.andExpect(jsonPath("$.certificates[0].issuedDate").isNotEmpty())
 				.andExpect(jsonPath("$.certificates[0].submissionUrl").isNotEmpty())
 				.andExpect(jsonPath("$.certificates[0].certificateId").value(org.hamcrest.Matchers.startsWith("NST-FSW-")));
+	}
+
+	@Test
+	@Transactional
+	void trainerPortalAuthListFilterAndReviewSubmissionFlow() throws Exception {
+		User learner = authService.register("Trainer Target Learner", "tr.learner@novastra.id", "secret123");
+		PortfolioProject project = portfolioProjectRepository.findAll().get(0);
+		PortfolioSubmission sub = new PortfolioSubmission();
+		sub.setSubmissionId("TR901");
+		sub.setUserId(learner.getUserId());
+		sub.setProjectId(project.getProjectId());
+		sub.setExternalUrl("https://github.com/novastra/trainer-check");
+		sub.setScore(BigDecimal.ZERO);
+		sub.setFeedbackNotes("");
+		sub.setStatus("SUBMITTED");
+		portfolioSubmissionRepository.saveAndFlush(sub);
+
+		MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+
+		// 1. Root & unauthenticated routing: localhost/127.0.0.1 -> /trainer/login, LAN IP -> Learner landing
+		mockMvc.perform(get("/"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/trainer/login"));
+		mockMvc.perform(get("/").with(req -> {
+					req.setServerName("127.0.0.1");
+					return req;
+				}))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/trainer/login"));
+		mockMvc.perform(get("/").with(req -> {
+					req.setServerName("172.22.7.202");
+					return req;
+				}))
+				.andExpect(status().isOk())
+				.andExpect(content().string(org.hamcrest.Matchers.containsString("/login")));
+		mockMvc.perform(get("/login").with(req -> {
+					req.setServerName("172.22.7.202");
+					return req;
+				}))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/trainer/submissions"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/trainer/login"));
+		mockMvc.perform(get("/trainer/login").with(req -> {
+					req.setServerName("172.22.7.202");
+					return req;
+				}))
+				.andExpect(status().isOk())
+				.andExpect(content().string(org.hamcrest.Matchers.containsString("Novastra Admin")))
+				.andExpect(content().string(org.hamcrest.Matchers.containsString("Trainer &amp; Reviewer Portal")))
+				.andExpect(content().string(org.hamcrest.Matchers.containsString("Masuk ke Admin Portal")))
+				.andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Daftar Akun"))))
+				.andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Lanjutkan sebagai Guest"))));
+		mockMvc.perform(get("/api/trainer/submissions"))
+				.andExpect(status().isUnauthorized());
+
+		// 2. Wrong password returns 401; valid credentials create HttpSession
+		mockMvc.perform(post("/api/trainer/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"trainer@novastra.id\",\"password\":\"wrong\"}"))
+				.andExpect(status().isUnauthorized());
+
+		org.springframework.mock.web.MockHttpSession trainerSession =
+				(org.springframework.mock.web.MockHttpSession) mockMvc.perform(post("/api/trainer/login")
+								.contentType(MediaType.APPLICATION_JSON)
+								.content("{\"email\":\"trainer@novastra.id\",\"password\":\"trainer123\"}"))
+						.andExpect(status().isOk())
+						.andExpect(jsonPath("$.authenticated").value(true))
+						.andExpect(jsonPath("$.trainerName").value("Novastra Trainer"))
+						.andReturn()
+						.getRequest()
+						.getSession(false);
+
+		mockMvc.perform(get("/trainer/submissions").session(trainerSession))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/trainer/login").session(trainerSession))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/trainer/submissions"));
+
+		// 3. List with status=PENDING & query filters finds TR901 and computes summary
+		mockMvc.perform(get("/api/trainer/submissions")
+						.session(trainerSession)
+						.param("status", "PENDING")
+						.param("q", "Trainer Target Learner"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.summary.pending").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.submissions[0].submissionId").value("TR901"))
+				.andExpect(jsonPath("$.submissions[0].normalizedStatus").value("PENDING"))
+				.andExpect(jsonPath("$.submissions[0].expectedOutput").isNotEmpty());
+
+		// 4. Validation errors (400 score out of bounds, 400 REJECTED without feedback, 404 missing ID)
+		mockMvc.perform(put("/api/trainer/submissions/{id}/review", "TR901")
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"score\":105,\"feedbackNotes\":\"OK\",\"status\":\"VERIFIED\"}"))
+				.andExpect(status().isBadRequest());
+
+		mockMvc.perform(put("/api/trainer/submissions/{id}/review", "TR901")
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"score\":60,\"feedbackNotes\":\"   \",\"status\":\"REJECTED\"}"))
+				.andExpect(status().isBadRequest());
+
+		mockMvc.perform(put("/api/trainer/submissions/{id}/review", "NO999")
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"score\":90,\"feedbackNotes\":\"Bagus\",\"status\":\"VERIFIED\"}"))
+				.andExpect(status().isNotFound());
+
+		// 5. Valid review persists score, feedbackNotes, and VERIFIED status
+		mockMvc.perform(put("/api/trainer/submissions/{id}/review", "TR901")
+						.session(trainerSession)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"score\":92,\"feedbackNotes\":\"Struktur kode rapi dan sesuai Expected Output.\",\"status\":\"VERIFIED\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.submission.score").value(92.0))
+				.andExpect(jsonPath("$.submission.status").value("VERIFIED"))
+				.andExpect(jsonPath("$.submission.feedbackNotes").value("Struktur kode rapi dan sesuai Expected Output."));
+
+		PortfolioSubmission persisted = portfolioSubmissionRepository.findById("TR901").orElseThrow();
+		assertEquals("VERIFIED", persisted.getStatus());
+		assertEquals(0, new BigDecimal("92.00").compareTo(persisted.getScore()));
+
+		// 6. Logout clears HttpSession and redirects /trainer/submissions back to /trainer/login
+		mockMvc.perform(post("/api/trainer/logout").session(trainerSession))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.authenticated").value(false));
+		mockMvc.perform(get("/trainer/submissions").session(trainerSession))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/trainer/login"));
 	}
 
 }

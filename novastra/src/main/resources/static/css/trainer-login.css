@@ -1,0 +1,224 @@
+:root {
+  --tl-bg: #FAF6F3;
+  --tl-surface: #FFFFFF;
+  --tl-surface-soft: #FDF9F6;
+  --tl-border: #E8E1DB;
+  --tl-terra: #CE6C4E;
+  --tl-terra-dark: #B65A3E;
+  --tl-terra-tint: #FCECE6;
+  --tl-danger: #C53030;
+  --tl-danger-tint: #FDECEC;
+  --tl-text-1: #1F1D1B;
+  --tl-text-2: #6B6560;
+  --tl-text-3: #9A928B;
+  --tl-shadow: 0 14px 36px rgba(31, 29, 27, 0.06);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body.tl-page {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(640px circle at 15% 12%, rgba(206, 108, 78, 0.08), transparent 60%),
+    radial-gradient(620px circle at 88% 85%, rgba(206, 108, 78, 0.06), transparent 58%),
+    var(--tl-bg);
+  color: var(--tl-text-1);
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.tl-icon-sm {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.tl-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+}
+
+.tl-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--tl-surface);
+  border: 1px solid var(--tl-border);
+  border-radius: 24px;
+  padding: 36px;
+  box-shadow: var(--tl-shadow);
+}
+
+.tl-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--tl-border);
+}
+
+.tl-brand-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--tl-terra);
+  color: #FFFFFF;
+  font-size: 19px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tl-title {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--tl-text-1);
+}
+
+.tl-subtitle {
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--tl-terra);
+}
+
+.tl-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.tl-field label {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--tl-text-1);
+}
+
+.tl-field input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 13px;
+  border: 1px solid var(--tl-border);
+  background: var(--tl-surface-soft);
+  color: var(--tl-text-1);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.tl-field input::placeholder {
+  color: var(--tl-text-3);
+  font-weight: 600;
+}
+
+.tl-field input:focus {
+  background: var(--tl-surface);
+  border-color: var(--tl-terra);
+  box-shadow: 0 0 0 3px rgba(206, 108, 78, 0.16);
+}
+
+.tl-pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tl-pw-wrap input {
+  padding-right: 46px;
+}
+
+.tl-pw-toggle {
+  position: absolute;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--tl-text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.tl-pw-toggle:hover {
+  background: var(--tl-terra-tint);
+  color: var(--tl-terra-dark);
+}
+
+.tl-pw-toggle:focus-visible {
+  outline: 2px solid var(--tl-terra);
+  outline-offset: 1px;
+}
+
+.tl-alert {
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.tl-alert--error {
+  background: var(--tl-danger-tint);
+  border: 1px solid #F7CACA;
+  color: var(--tl-danger);
+}
+
+.tl-btn-primary {
+  margin-top: 4px;
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 14px;
+  background: var(--tl-terra);
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.16s ease, transform 0.12s ease, opacity 0.16s ease;
+}
+
+.tl-btn-primary:hover:not(:disabled) {
+  background: var(--tl-terra-dark);
+}
+
+.tl-btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.tl-btn-primary:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}

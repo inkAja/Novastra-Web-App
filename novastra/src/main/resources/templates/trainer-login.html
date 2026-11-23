@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novastra Admin — Trainer &amp; Reviewer Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&amp;display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/css/trainer-login.css?v=1" />
+</head>
+<body class="tl-page">
+  <main class="tl-shell">
+    <section class="tl-card" aria-labelledby="tl-heading">
+      <header class="tl-header">
+        <span class="tl-brand-circle" aria-hidden="true">N</span>
+        <div>
+          <h1 id="tl-heading" class="tl-title">Novastra Admin</h1>
+          <p class="tl-subtitle">Trainer &amp; Reviewer Portal</p>
+        </div>
+      </header>
+
+      <form id="tl-form" class="tl-form" novalidate>
+        <div class="tl-field">
+          <label for="tl-email">Email</label>
+          <input
+            id="tl-email"
+            name="email"
+            type="email"
+            autocomplete="username"
+            placeholder="trainer@novastra.id"
+            required
+          />
+        </div>
+
+        <div class="tl-field">
+          <label for="tl-password">Password</label>
+          <div class="tl-pw-wrap">
+            <input
+              id="tl-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Masukkan password trainer"
+              required
+            />
+            <button
+              type="button"
+              id="tl-toggle-pw"
+              class="tl-pw-toggle"
+              aria-label="Tampilkan password"
+              aria-pressed="false"
+            >
+              <i data-lucide="eye" class="tl-icon-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="tl-error" class="tl-alert tl-alert--error is-hidden" role="alert"></div>
+
+        <button type="submit" id="tl-submit" class="tl-btn-primary">
+          <i data-lucide="log-in" class="tl-icon-sm"></i>
+          <span id="tl-submit-label">Masuk ke Admin Portal</span>
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/js/trainer-login.js?v=1"></script>
+</body>
+</html>
