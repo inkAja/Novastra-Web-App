@@ -55,16 +55,19 @@ public class TrainerReviewService {
     private final PortfolioProjectRepository portfolioProjectRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final CareerService careerService;
 
     public TrainerReviewService(
             PortfolioSubmissionRepository portfolioSubmissionRepository,
             PortfolioProjectRepository portfolioProjectRepository,
             CourseRepository courseRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            CareerService careerService) {
         this.portfolioSubmissionRepository = portfolioSubmissionRepository;
         this.portfolioProjectRepository = portfolioProjectRepository;
         this.courseRepository = courseRepository;
         this.userRepository = userRepository;
+        this.careerService = careerService;
     }
 
     public TrainerSubmissionsResponse listSubmissions(String statusFilter, String query) {
@@ -126,6 +129,7 @@ public class TrainerReviewService {
         sub.setFeedbackNotes(feedback);
         sub.setStatus(rawStatus);
         PortfolioSubmission saved = portfolioSubmissionRepository.saveAndFlush(sub);
+        careerService.recalculateUserSkillGaps(saved.getUserId());
 
         TrainerSubmissionItem updatedItem = mapSubmissions(List.of(saved)).get(0);
         TrainerSubmissionSummary summary = listSubmissions(null, null).summary();

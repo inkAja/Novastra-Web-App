@@ -267,21 +267,7 @@
           </div>
 
           <div class="cr-stack">
-            ${projects.length ? projects.map((p) => {
-              const meta = getProjectStatusMeta(p);
-              return `
-                <button type="button" data-open-project="${esc(p.projectId)}" class="cr-project-card">
-                  <div class="cr-project-badges">
-                    <span class="cr-project-course">${esc(p.courseTitle || p.courseId)}</span>
-                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
-                  </div>
-                  <h3 class="cr-project-title">${esc(p.title)}</h3>
-                  <p class="cr-project-desc">${esc(getProjectSummaryLine(p.expectedOutput))}</p>
-                  ${p.externalUrl ? `<p class="cr-project-url">🔗 ${esc(p.externalUrl)}</p>` : ''}
-                  <span class="cr-project-cta">${esc(meta.cta)}</span>
-                </button>
-              `;
-            }).join('') : '<p class="text-xs text-[#6B6560]">Belum ada proyek portofolio untuk role ini.</p>'}
+            ${projects.length ? projects.map((p) => renderProjectCard(p, true)).join('') : '<p class="text-xs text-[#6B6560]">Belum ada proyek portofolio untuk role ini.</p>'}
           </div>
         </section>
       </div>
@@ -413,25 +399,7 @@
             </div>
 
             <div class="space-y-2.5">
-              ${projects.length ? projects.map((p) => {
-                const meta = getProjectStatusMeta(p);
-                return `
-                  <button type="button" data-open-project="${esc(p.projectId)}" class="w-full text-left p-4 rounded-2xl bg-[#FAF8F5] border border-[#E8E2DA] hover:border-[#D97757] hover:shadow-sm transition-all flex flex-col gap-2 cursor-pointer group">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                      <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FDF0EB] text-[#D97757] max-w-full truncate">${esc(p.courseTitle || p.courseId)}</span>
-                      <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
-                    </div>
-                    <div>
-                      <p class="text-sm font-extrabold text-[#2C2A27] group-hover:text-[#D97757]">${esc(p.title)}</p>
-                      <p class="text-[11px] text-[#6B6560] mt-1 line-clamp-2">${esc(getProjectSummaryLine(p.expectedOutput))}</p>
-                    </div>
-                    ${p.externalUrl ? `<p class="text-[11px] font-mono text-[#5E7C6B] truncate">🔗 ${esc(p.externalUrl)}</p>` : ''}
-                    <div class="flex items-center justify-end pt-1">
-                      <span class="text-xs font-extrabold text-[#D97757]">${esc(meta.cta)}</span>
-                    </div>
-                  </button>
-                `;
-              }).join('') : '<p class="text-xs text-[#6B6560]">Belum ada proyek portofolio untuk role ini.</p>'}
+              ${projects.length ? projects.map((p) => renderProjectCard(p, false)).join('') : '<p class="text-xs text-[#6B6560]">Belum ada proyek portofolio untuk role ini.</p>'}
             </div>
           </section>
         </div>
@@ -526,28 +494,193 @@
     `;
   }
 
-  function getProjectStatusMeta(project) {
+  function safeHttpUrl(url) {
+    const trimmed = String(url || '').trim();
+    return /^https?:\/\/.+/i.test(trimmed) ? trimmed : '';
+  }
+
+  function resolveProjectLifecycle(project) {
+    const explicit = String(project?.lifecycleState || '').trim().toUpperCase();
     const raw = String(project?.status || 'NOT_SUBMITTED').trim().toUpperCase();
-    const score = Number(project?.score ?? 0);
-    if (raw === 'APPROVED' || raw === 'PASSED' || raw === 'LULUS') {
+    const outcome = String(project?.reviewOutcome || '').trim().toUpperCase();
+
+    if (explicit === 'LOCKED' || raw === 'LOCKED') {
+      return { state: 'LOCKED', outcome: '' };
+    }
+    if (explicit === 'REVIEWED') {
+      return { state: 'REVIEWED', outcome: outcome === 'REJECTED' || raw === 'REJECTED' ? 'REJECTED' : 'VERIFIED' };
+    }
+    if (raw === 'VERIFIED' || raw === 'APPROVED' || raw === 'PASSED' || raw === 'LULUS') {
+      return { state: 'REVIEWED', outcome: 'VERIFIED' };
+    }
+    if (raw === 'REJECTED' || raw === 'REVISION' || raw === 'REVISI' || raw === 'DITOLAK') {
+      return { state: 'REVIEWED', outcome: 'REJECTED' };
+    }
+    if (explicit === 'PENDING_REVIEW' || raw === 'PENDING' || raw === 'SUBMITTED') {
+      return { state: 'PENDING_REVIEW', outcome: '' };
+    }
+    return { state: 'UNLOCKED', outcome: '' };
+  }
+
+  function getProjectStatusMeta(project) {
+    const { state: lc, outcome } = resolveProjectLifecycle(project);
+    const hasScore = project?.score !== null && project?.score !== undefined && project?.score !== '';
+    const scoreNum = hasScore ? Math.round(Number(project.score)) : 0;
+
+    if (lc === 'LOCKED') {
       return {
-        label: score > 0 ? `✓ Lulus Verifikasi (${score})` : '✓ Lulus Verifikasi',
-        cls: 'bg-[#8A9A86] text-white',
-        cta: 'Lihat Detail & Hasil →'
+        lifecycleState: 'LOCKED',
+        reviewOutcome: '',
+        locked: true,
+        scoreNum,
+        label: 'Terkunci',
+        cls: 'bg-[#EDE7E0] text-[#78716C]',
+        cta: 'Selesaikan prasyarat untuk membuka'
       };
     }
-    if (raw === 'SUBMITTED' || raw === 'PENDING') {
+    if (lc === 'REVIEWED' && outcome === 'VERIFIED') {
       return {
-        label: 'Submitted · Sudah Dikumpulkan',
-        cls: 'bg-[#F0F3EF] text-[#5E7C6B] border border-[#8A9A86]/50',
-        cta: 'Lihat Detail & Perbarui →'
+        lifecycleState: 'REVIEWED',
+        reviewOutcome: 'VERIFIED',
+        locked: false,
+        scoreNum,
+        label: `Terverifikasi • Skor: ${scoreNum}/100`,
+        cls: 'bg-[#E9F2EB] text-[#3F6A4A] border border-[#8A9A86]/50',
+        cta: 'Lihat Hasil Evaluasi →'
+      };
+    }
+    if (lc === 'REVIEWED' && outcome === 'REJECTED') {
+      return {
+        lifecycleState: 'REVIEWED',
+        reviewOutcome: 'REJECTED',
+        locked: false,
+        scoreNum,
+        label: `Perlu Revisi • Skor: ${scoreNum}/100`,
+        cls: 'bg-[#FDECEB] text-[#B93829] border border-[#F2A68D]',
+        cta: 'Kumpulkan Ulang Revisi →'
+      };
+    }
+    if (lc === 'PENDING_REVIEW') {
+      return {
+        lifecycleState: 'PENDING_REVIEW',
+        reviewOutcome: '',
+        locked: false,
+        scoreNum,
+        label: 'Menunggu Review Trainer',
+        cls: 'bg-[#FEF4E6] text-[#B76B1E] border border-[#F3D19E]',
+        cta: 'Lihat Detail & Perbarui Tautan →'
       };
     }
     return {
-      label: 'Belum Dikumpulkan',
-      cls: 'bg-[#F5F0EA] text-[#6B6560]',
-      cta: 'Lihat Detail & Kumpulkan →'
+      lifecycleState: 'UNLOCKED',
+      reviewOutcome: '',
+      locked: false,
+      scoreNum,
+      label: 'Siap Dikumpulkan',
+      cls: 'bg-[#FCECE6] text-[#CE6C4E] border border-[#F2C3B2]',
+      cta: 'Kumpulkan Proyek →'
     };
+  }
+
+  function renderProjectStateDetails(project, meta, isMobile) {
+    if (meta.locked) {
+      const reason = project.lockReason || 'Selesaikan 100% materi kurikulum dan lulus seluruh Blind Test PoW untuk membuka pengumpulan proyek ini.';
+      if (isMobile) {
+        return `
+          <p class="cr-project-lock-note">
+            <i data-lucide="lock" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+            <span>${esc(reason)}</span>
+          </p>
+        `;
+      }
+      return `
+        <p class="text-[11px] font-bold text-[#78716C] flex items-start gap-1.5 bg-[#EFEAE4] px-3 py-2 rounded-xl">
+          <i data-lucide="lock" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+          <span>${esc(reason)}</span>
+        </p>
+      `;
+    }
+
+    const urlHtml = project.externalUrl
+      ? (isMobile
+        ? `<p class="cr-project-url">🔗 ${esc(project.externalUrl)}</p>`
+        : `<p class="text-[11px] font-mono text-[#5E7C6B] truncate">🔗 ${esc(project.externalUrl)}</p>`)
+      : '';
+
+    if (meta.lifecycleState === 'PENDING_REVIEW') {
+      const queueMsg = 'Proyek Anda sedang dalam antrean evaluasi Trainer.';
+      return `${urlHtml}${isMobile
+        ? `<p class="cr-project-pending-note">${esc(queueMsg)}</p>`
+        : `<p class="text-[11px] font-bold text-[#B76B1E]">${esc(queueMsg)}</p>`}`;
+    }
+
+    if (meta.lifecycleState === 'REVIEWED') {
+      const isVerified = meta.reviewOutcome === 'VERIFIED';
+      const note = String(project.feedbackNotes || '').trim() || 'Tidak ada catatan tambahan dari Trainer.';
+      const heading = isVerified ? 'Evaluasi Trainer' : 'Catatan Revisi Trainer';
+      if (isMobile) {
+        return `
+          ${urlHtml}
+          <div class="cr-project-feedback ${isVerified ? 'cr-project-feedback--verified' : 'cr-project-feedback--rejected'}">
+            <p class="font-extrabold">${esc(heading)}</p>
+            <p>${esc(note)}</p>
+          </div>
+        `;
+      }
+      const boxCls = isVerified
+        ? 'bg-[#EFF6F0] border border-[#C5DEC9] text-[#2E5238]'
+        : 'bg-[#FDF1EF] border border-[#F3B8B0] text-[#932D22]';
+      return `
+        ${urlHtml}
+        <div class="p-2.5 rounded-xl text-[11px] space-y-0.5 ${boxCls}">
+          <p class="font-extrabold">${esc(heading)}</p>
+          <p class="line-clamp-2">${esc(note)}</p>
+        </div>
+      `;
+    }
+
+    return urlHtml;
+  }
+
+  function renderProjectCard(project, isMobile) {
+    const meta = getProjectStatusMeta(project);
+    const detailsHtml = renderProjectStateDetails(project, meta, isMobile);
+
+    if (isMobile) {
+      const inner = `
+        <div class="cr-project-badges">
+          <span class="cr-project-course">${esc(project.courseTitle || project.courseId)}</span>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
+        </div>
+        <h3 class="cr-project-title">${esc(project.title)}</h3>
+        <p class="cr-project-desc">${esc(getProjectSummaryLine(project.expectedOutput))}</p>
+        ${detailsHtml}
+        <span class="cr-project-cta">${meta.locked ? 'Terkunci' : esc(meta.cta)}</span>
+      `;
+      if (meta.locked) {
+        return `<div class="cr-project-card is-locked" aria-disabled="true">${inner}</div>`;
+      }
+      return `<button type="button" data-open-project="${esc(project.projectId)}" class="cr-project-card">${inner}</button>`;
+    }
+
+    const desktopInner = `
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FDF0EB] text-[#D97757] max-w-full truncate">${esc(project.courseTitle || project.courseId)}</span>
+        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${meta.cls}">${esc(meta.label)}</span>
+      </div>
+      <div>
+        <p class="text-sm font-extrabold ${meta.locked ? 'text-[#6B6560]' : 'text-[#2C2A27] group-hover:text-[#D97757]'}">${esc(project.title)}</p>
+        <p class="text-[11px] text-[#6B6560] mt-1 line-clamp-2">${esc(getProjectSummaryLine(project.expectedOutput))}</p>
+      </div>
+      ${detailsHtml}
+      <div class="flex items-center justify-end pt-1">
+        <span class="text-xs font-extrabold ${meta.locked ? 'text-[#78716C] inline-flex items-center gap-1' : 'text-[#D97757]'}">${meta.locked ? '<i data-lucide="lock" class="w-3.5 h-3.5"></i><span>Terkunci</span>' : esc(meta.cta)}</span>
+      </div>
+    `;
+    if (meta.locked) {
+      return `<div aria-disabled="true" class="w-full text-left p-4 rounded-2xl bg-[#F7F3EE] border border-dashed border-[#DCD3CA] opacity-85 flex flex-col gap-2 cursor-not-allowed">${desktopInner}</div>`;
+    }
+    return `<button type="button" data-open-project="${esc(project.projectId)}" class="w-full text-left p-4 rounded-2xl bg-[#FAF8F5] border border-[#E8E2DA] hover:border-[#D97757] hover:shadow-sm transition-all flex flex-col gap-2 cursor-pointer group">${desktopInner}</button>`;
   }
 
   function getProjectSummaryLine(text) {
@@ -604,8 +737,9 @@
   function openProjectModal(projectId, projects) {
     if (!projects.length) return;
     const target = projectId
-      ? (projects.find((p) => p.projectId === projectId) || projects[0])
-      : (projects.find((p) => String(p.status || 'NOT_SUBMITTED').toUpperCase() === 'NOT_SUBMITTED') || projects[0]);
+      ? projects.find((p) => p.projectId === projectId)
+      : projects.find((p) => resolveProjectLifecycle(p).state !== 'LOCKED');
+    if (!target || resolveProjectLifecycle(target).state === 'LOCKED') return;
     state.activeProjectId = target.projectId;
     state.projectUrl = target.externalUrl || '';
     state.projectError = '';
@@ -613,16 +747,56 @@
   }
 
   function renderProjectModal(projects) {
-    const proj = projects.find((p) => p.projectId === state.activeProjectId) || projects[0];
+    const proj = projects.find((p) => p.projectId === state.activeProjectId);
     if (!proj) return '';
     const meta = getProjectStatusMeta(proj);
+    if (meta.locked) return '';
+
     const rawNote = String(proj.feedbackNotes || '').trim();
-    const hasSpecificNote = Boolean(rawNote) && !/menunggu proses ai audit/i.test(rawNote);
-    const normStatus = String(proj.status || 'NOT_SUBMITTED').trim().toUpperCase();
-    const isSubmitted = Boolean(proj.externalUrl) || ['SUBMITTED', 'PENDING', 'APPROVED', 'PASSED', 'LULUS'].includes(normStatus);
-    const reviewNote = hasSpecificNote
-      ? rawNote
-      : (isSubmitted ? 'Tautan karya telah berhasil disimpan.' : 'Belum ada catatan review.');
+    const safeUrl = safeHttpUrl(proj.externalUrl);
+    const isVerified = meta.lifecycleState === 'REVIEWED' && meta.reviewOutcome === 'VERIFIED';
+    const isRejected = meta.lifecycleState === 'REVIEWED' && meta.reviewOutcome === 'REJECTED';
+    const isPending = meta.lifecycleState === 'PENDING_REVIEW';
+
+    const submittedLinkHtml = safeUrl
+      ? `<a href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-mono underline break-all text-[#3F6A4A] hover:opacity-80">${esc(safeUrl)}</a>`
+      : '';
+
+    let statusSectionHtml = '';
+    if (isVerified) {
+      statusSectionHtml = `
+        <div class="p-4 rounded-2xl bg-[#EFF6F0] border border-[#C5DEC9] text-xs text-[#2E5238] space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="font-extrabold">Hasil Evaluasi Trainer</p>
+            <span class="px-2.5 py-0.5 rounded-full bg-white/80 font-extrabold text-[11px]">Terverifikasi • Skor: ${meta.scoreNum}/100</span>
+          </div>
+          <p class="text-[12px] leading-relaxed">${esc(rawNote || 'Selamat! Proyek Anda telah memenuhi ekspektasi Trainer.')}</p>
+          ${safeUrl ? `<div class="pt-1 border-t border-[#C5DEC9]/70 space-y-0.5"><p class="text-[11px] font-bold">Tautan Karya Terverifikasi:</p>${submittedLinkHtml}</div>` : ''}
+        </div>
+      `;
+    } else if (isRejected) {
+      statusSectionHtml = `
+        <div class="p-4 rounded-2xl bg-[#FDF1EF] border border-[#F3B8B0] text-xs text-[#932D22] space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="font-extrabold">Catatan Revisi dari Trainer</p>
+            <span class="px-2.5 py-0.5 rounded-full bg-white/80 font-extrabold text-[11px]">Perlu Revisi • Skor: ${meta.scoreNum}/100</span>
+          </div>
+          <p class="text-[12px] leading-relaxed">${esc(rawNote || 'Silakan perbaiki karya sesuai kriteria wajib lalu kumpulkan ulang.')}</p>
+        </div>
+      `;
+    } else if (isPending) {
+      statusSectionHtml = `
+        <div class="p-4 rounded-2xl bg-[#FEF4E6] border border-[#F3D19E] text-xs text-[#925114] space-y-1.5">
+          <p class="font-extrabold">Menunggu Review Trainer</p>
+          <p class="text-[11px] leading-relaxed">Proyek Anda sedang dalam antrean evaluasi Trainer. Anda masih dapat memperbarui tautan sebelum dinilai.</p>
+          ${safeUrl ? `<p class="text-[11px] font-mono break-all">Tautan saat ini: ${esc(safeUrl)}</p>` : ''}
+        </div>
+      `;
+    }
+
+    const submitLabel = isRejected
+      ? 'Kumpulkan Ulang Revisi →'
+      : (isPending ? 'Perbarui Tautan Proyek →' : 'Kumpulkan Proyek →');
 
     return `
       <div id="pj-backdrop" class="fixed inset-0 z-50 bg-[#2C2A27]/55 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -642,27 +816,31 @@
             ${formatExpectedOutput(proj.expectedOutput)}
           </div>
 
-          <div class="p-3.5 rounded-2xl bg-[#F0F3EF] border border-[#8A9A86]/40 text-xs text-[#2C2A27] space-y-1">
-            <p class="font-extrabold text-[#5E7C6B]">Catatan Review${Number(proj.score ?? 0) > 0 ? ` · Skor ${esc(proj.score)}` : ''}</p>
-            <p class="text-[11px]">${esc(reviewNote)}</p>
-          </div>
+          ${statusSectionHtml}
 
-          <form id="pj-form" class="space-y-3 pt-1">
-            <div class="space-y-1.5">
-              <label for="pj-url" class="block text-xs font-extrabold text-[#2C2A27]">Tautan Hasil Proyek (URL Publik)</label>
-              <input id="pj-url" type="url" value="${esc(state.projectUrl)}" placeholder="https://github.com/username/project-repo atau https://figma.com/..." ${state.submittingProject ? 'disabled' : ''} class="w-full px-4 py-3 rounded-xl bg-white border border-[#E8E2DA] text-xs font-medium focus:outline-none focus:border-[#D97757] disabled:bg-[#F5F0EA] disabled:text-[#9A948D]" />
-              <p class="text-[11px] text-[#6B6560]">Pastikan link repositori GitHub, demo Vercel/Netlify, Google Docs, atau Figma dapat diakses publik.</p>
+          ${isVerified ? `
+            <div class="flex items-center justify-between gap-3 pt-1">
+              <p class="text-[11px] font-bold text-[#5E7C6B]">Proyek telah terverifikasi dan dikunci.</p>
+              <button type="button" id="pj-cancel" class="px-5 py-2.5 rounded-xl border border-[#E8E2DA] bg-white text-xs font-extrabold text-[#2C2A27] hover:bg-[#F5F0EA] cursor-pointer">Tutup</button>
             </div>
+          ` : `
+            <form id="pj-form" class="space-y-3 pt-1">
+              <div class="space-y-1.5">
+                <label for="pj-url" class="block text-xs font-extrabold text-[#2C2A27]">Tautan Hasil Proyek (URL Publik)</label>
+                <input id="pj-url" type="url" value="${esc(state.projectUrl)}" placeholder="https://github.com/username/project-repo atau https://figma.com/..." ${state.submittingProject ? 'disabled' : ''} class="w-full px-4 py-3 rounded-xl bg-white border border-[#E8E2DA] text-xs font-medium focus:outline-none focus:border-[#D97757] disabled:bg-[#F5F0EA] disabled:text-[#9A948D]" />
+                <p class="text-[11px] text-[#6B6560]">Pastikan link repositori GitHub, demo Vercel/Netlify, Google Docs, atau Figma dapat diakses publik.</p>
+              </div>
 
-            ${state.projectError ? `<div class="p-3 rounded-xl bg-[#FDF0EB] border border-[#F2A68D] text-xs font-bold text-[#A64B2A]">${esc(state.projectError)}</div>` : ''}
+              ${state.projectError ? `<div class="p-3 rounded-xl bg-[#FDF0EB] border border-[#F2A68D] text-xs font-bold text-[#A64B2A]">${esc(state.projectError)}</div>` : ''}
 
-            <div class="flex items-center justify-end gap-2.5 pt-2">
-              <button type="button" id="pj-cancel" class="px-4 py-2.5 rounded-xl border border-[#E8E2DA] bg-white text-xs font-extrabold text-[#6B6560] hover:text-[#2C2A27] cursor-pointer">Tutup</button>
-              <button type="submit" id="pj-submit" ${state.submittingProject ? 'disabled' : ''} class="px-5 py-2.5 rounded-xl text-xs font-extrabold transition-colors bg-[#D97757] hover:opacity-95 text-white cursor-pointer disabled:opacity-60">
-                ${state.submittingProject ? 'Mengirim Tautan...' : 'Kumpulkan Tautan Proyek →'}
-              </button>
-            </div>
-          </form>
+              <div class="flex items-center justify-end gap-2.5 pt-2">
+                <button type="button" id="pj-cancel" class="px-4 py-2.5 rounded-xl border border-[#E8E2DA] bg-white text-xs font-extrabold text-[#6B6560] hover:text-[#2C2A27] cursor-pointer">Tutup</button>
+                <button type="submit" id="pj-submit" ${state.submittingProject ? 'disabled' : ''} class="px-5 py-2.5 rounded-xl text-xs font-extrabold transition-colors bg-[#D97757] hover:opacity-95 text-white cursor-pointer disabled:opacity-60">
+                  ${state.submittingProject ? 'Mengirim Tautan...' : submitLabel}
+                </button>
+              </div>
+            </form>
+          `}
         </div>
       </div>
     `;
@@ -714,7 +892,7 @@
       if (freshRes.ok) {
         state.career = await freshRes.json();
       }
-      showToast('Proyek berhasil dikumpulkan! Status diperbarui menjadi Submitted.');
+      showToast('Proyek berhasil dikumpulkan dan menunggu review Trainer.');
     } catch (err) {
       state.projectError = `Gagal mengumpulkan proyek: ${err.message}`;
       render();

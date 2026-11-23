@@ -43,6 +43,7 @@ public class CareerService {
 
     private static final String BLIND_TEST = "BLIND_TEST";
     private static final BigDecimal PASSING_SCORE = BigDecimal.valueOf(75);
+    private static final BigDecimal PORTFOLIO_PASSING_SCORE = BigDecimal.valueOf(70);
 
     private final UserRepository userRepository;
     private final CareerRoleRepository careerRoleRepository;
@@ -120,7 +121,7 @@ public class CareerService {
             empty.put("portfolioProjects", List.of());
             empty.put("isCurriculumCompleted", false);
             empty.put("isAllPowPassed", false);
-            empty.put("canRunAiAudit", false);
+            empty.put("canSubmitPortfolio", false);
             return empty;
         }
 
@@ -188,9 +189,10 @@ public class CareerService {
                 .allMatch(c -> ((Number) c.getOrDefault("progressPercentage", 0)).intValue() >= 100);
         boolean isAllPowPassed = !blindTests.isEmpty() && blindTests.stream()
                 .allMatch(b -> Boolean.TRUE.equals(b.get("isPassed")));
-        boolean canRunAiAudit = isCurriculumCompleted && isAllPowPassed;
+        boolean canSubmitPortfolio = isCurriculumCompleted && isAllPowPassed;
 
-        List<Map<String, Object>> portfolioProjects = buildPortfolioProjects(uid, roleCourses, projects);
+        List<Map<String, Object>> portfolioProjects =
+                buildPortfolioProjects(uid, roleCourses, projects, canSubmitPortfolio);
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("userId", uid);
@@ -210,13 +212,13 @@ public class CareerService {
         payload.put("portfolioProjects", portfolioProjects);
         payload.put("isCurriculumCompleted", isCurriculumCompleted);
         payload.put("isAllPowPassed", isAllPowPassed);
-        payload.put("canRunAiAudit", canRunAiAudit);
+        payload.put("canSubmitPortfolio", canSubmitPortfolio);
         return payload;
     }
 
-    /** Memeriksa apakah user memenuhi prasyarat AI Audit (kurikulum 100% dan seluruh PoW Blind Test lulus). */
-    public boolean canUserRunAudit(String userId) {
-        return Boolean.TRUE.equals(getCareerRoadmap(userId).get("canRunAiAudit"));
+    /** Memeriksa apakah user memenuhi prasyarat pengumpulan proyek (kurikulum 100% dan seluruh PoW Blind Test lulus). */
+    public boolean canSubmitPortfolio(String userId) {
+        return Boolean.TRUE.equals(getCareerRoadmap(userId).get("canSubmitPortfolio"));
     }
 
     @Transactional
@@ -241,30 +243,24 @@ public class CareerService {
         PortfolioProject project = portfolioProjectRepository.findById(pid)
                 .orElseThrow(() -> new NoSuchElementException("Proyek portofolio tidak ditemukan."));
 
-        if (!canUserRunAudit(uid)) {
-            throw new IllegalStateException("Selesaikan 100% kurikulum dan seluruh Blind Test PoW sebelum mengumpulkan proyek AI Audit.");
+        if (!canSubmitPortfolio(uid)) {
+            throw new IllegalStateException("Selesaikan 100% kurikulum dan seluruh Blind Test PoW sebelum mengumpulkan proyek portofolio.");
         }
 
-        PortfolioSubmission submission = portfolioSubmissionRepository
+        PortfolioSubmission existing = portfolioSubmissionRepository
                 .findFirstByUserIdAndProjectIdOrderBySubmissionIdAsc(uid, pid)
-                .orElseGet(() -> {
-                    String latestSbId = portfolioSubmissionRepository
-                            .findTopBySubmissionIdStartingWithOrderBySubmissionIdDesc("SB")
-                            .map(PortfolioSubmission::getSubmissionId)
-                            .orElse(null);
-                    PortfolioSubmission created = new PortfolioSubmission();
-                    created.setSubmissionId(AuthService.nextId("SB", latestSbId));
-                    created.setUserId(uid);
-                    created.setProjectId(pid);
-                    return created;
-                });
+                .orElse(null);
+        if (existing != null && "VERIFIED".equals(TrainerReviewService.normalizeStatus(existing.getStatus()))) {
+            throw new IllegalStateException("Proyek ini sudah terverifikasi oleh Trainer dan tidak dapat diubah lagi.");
+        }
 
+        PortfolioSubmission submission = existing != null ? existing : createPortfolioSubmission(uid, pid);
         submission.setExternalUrl(trimmedUrl);
-        submission.setStatus("SUBMITTED");
+        submission.setStatus("PENDING");
+        // score column is NOT NULL in PostgreSQL; API responses expose null while PENDING_REVIEW
         submission.setScore(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        submission.setFeedbackNotes("Menunggu proses AI Audit...");
-        PortfolioSubmission saved = portfolioSubmissionRepository.save(submission);
-        recalculateUserSkillGaps(uid);
+        submission.setFeedbackNotes(null);
+        PortfolioSubmission saved = portfolioSubmissionRepository.saveAndFlush(submission);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("submissionId", saved.getSubmissionId());
@@ -272,15 +268,29 @@ public class CareerService {
         response.put("projectId", saved.getProjectId());
         response.put("projectTitle", project.getTitle());
         response.put("externalUrl", saved.getExternalUrl());
+        response.put("lifecycleState", "PENDING_REVIEW");
+        response.put("reviewOutcome", null);
         response.put("status", saved.getStatus());
-        response.put("score", saved.getScore());
-        response.put("feedbackNotes", saved.getFeedbackNotes());
-        response.put("message", "Proyek berhasil dikumpulkan dan masuk antrean AI Audit.");
+        response.put("score", null);
+        response.put("feedbackNotes", null);
+        response.put("message", "Proyek berhasil dikumpulkan dan menunggu review Trainer.");
         return response;
     }
 
+    private PortfolioSubmission createPortfolioSubmission(String userId, String projectId) {
+        String latestSbId = portfolioSubmissionRepository
+                .findTopBySubmissionIdStartingWithOrderBySubmissionIdDesc("SB")
+                .map(PortfolioSubmission::getSubmissionId)
+                .orElse(null);
+        PortfolioSubmission created = new PortfolioSubmission();
+        created.setSubmissionId(AuthService.nextId("SB", latestSbId));
+        created.setUserId(userId);
+        created.setProjectId(projectId);
+        return created;
+    }
+
     private List<Map<String, Object>> buildPortfolioProjects(
-            String userId, List<Course> roleCourses, List<PortfolioProject> projects) {
+            String userId, List<Course> roleCourses, List<PortfolioProject> projects, boolean prerequisitesMet) {
         if (projects.isEmpty()) {
             return List.of();
         }
@@ -316,18 +326,48 @@ public class CareerService {
                     item.put("courseTitle", course != null ? course.getTitle() : "");
                     item.put("title", p.getTitle());
                     item.put("expectedOutput", p.getExpectedOutput());
-                    if (sub != null) {
-                        item.put("submissionId", sub.getSubmissionId());
-                        item.put("externalUrl", sub.getExternalUrl());
-                        item.put("status", sub.getStatus());
-                        item.put("score", sub.getScore());
-                        item.put("feedbackNotes", sub.getFeedbackNotes() != null ? sub.getFeedbackNotes() : "");
-                    } else {
+
+                    if (sub == null) {
                         item.put("submissionId", null);
                         item.put("externalUrl", "");
-                        item.put("status", "NOT_SUBMITTED");
+                        item.put("lifecycleState", prerequisitesMet ? "UNLOCKED" : "LOCKED");
+                        item.put("reviewOutcome", null);
+                        item.put("status", prerequisitesMet ? "NOT_SUBMITTED" : "LOCKED");
                         item.put("score", null);
                         item.put("feedbackNotes", "");
+                        item.put("canSubmit", prerequisitesMet);
+                        item.put("lockReason", prerequisitesMet
+                                ? ""
+                                : "Selesaikan 100% materi kurikulum dan lulus seluruh Blind Test PoW untuk membuka pengumpulan proyek ini.");
+                        return item;
+                    }
+
+                    String normStatus = TrainerReviewService.normalizeStatus(sub.getStatus());
+                    item.put("submissionId", sub.getSubmissionId());
+                    item.put("externalUrl", sub.getExternalUrl());
+                    item.put("lockReason", "");
+
+                    if ("VERIFIED".equals(normStatus)) {
+                        item.put("lifecycleState", "REVIEWED");
+                        item.put("reviewOutcome", "VERIFIED");
+                        item.put("status", "VERIFIED");
+                        item.put("score", sub.getScore());
+                        item.put("feedbackNotes", sub.getFeedbackNotes() != null ? sub.getFeedbackNotes() : "");
+                        item.put("canSubmit", false);
+                    } else if ("REJECTED".equals(normStatus)) {
+                        item.put("lifecycleState", "REVIEWED");
+                        item.put("reviewOutcome", "REJECTED");
+                        item.put("status", "REJECTED");
+                        item.put("score", sub.getScore());
+                        item.put("feedbackNotes", sub.getFeedbackNotes() != null ? sub.getFeedbackNotes() : "");
+                        item.put("canSubmit", true);
+                    } else {
+                        item.put("lifecycleState", "PENDING_REVIEW");
+                        item.put("reviewOutcome", null);
+                        item.put("status", "PENDING");
+                        item.put("score", null);
+                        item.put("feedbackNotes", null);
+                        item.put("canSubmit", true);
                     }
                     return item;
                 })
@@ -422,11 +462,18 @@ public class CareerService {
                                 s -> s.getProjectId().trim(),
                                 s -> s,
                                 (a, b) -> a));
-                long submittedCount = projectIds.stream()
-                        .map(pid -> subByProject.get(pid.trim()))
-                        .filter(sub -> sub != null && sub.getExternalUrl() != null && !sub.getExternalUrl().isBlank())
-                        .count();
-                portfolioRatio = (double) submittedCount / projects.size();
+                double verifiedScoreSum = 0.0;
+                for (String pid : projectIds) {
+                    PortfolioSubmission sub = subByProject.get(pid.trim());
+                    if (sub == null || sub.getScore() == null) {
+                        continue;
+                    }
+                    if ("VERIFIED".equals(TrainerReviewService.normalizeStatus(sub.getStatus()))
+                            && sub.getScore().compareTo(PORTFOLIO_PASSING_SCORE) >= 0) {
+                        verifiedScoreSum += Math.max(0.0, Math.min(1.0, sub.getScore().doubleValue() / 100.0));
+                    }
+                }
+                portfolioRatio = verifiedScoreSum / projects.size();
             }
         }
 
@@ -622,7 +669,7 @@ public class CareerService {
         String[] actions = {
                 "Tutup gap fundamental %s (gap %d poin → target %d%%) dan selesaikan Blind Test awal.",
                 "Perdalam %s (gap %d poin → target %d%%) lewat proyek portofolio di jalur %s.",
-                "Matangkan %s (gap %d poin → target %d%%) lalu jalankan AI Audit portofolio."
+                "Matangkan %s (gap %d poin → target %d%%) lalu selesaikan evaluasi portofolio bersama Trainer."
         };
         int count = Math.min(3, sortedByGap.size());
         List<Map<String, Object>> roadmap = new java.util.ArrayList<>();

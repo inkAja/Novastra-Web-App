@@ -40,6 +40,7 @@ import com.jarvis.novastra.service.OnboardingService;
 import com.jarvis.novastra.service.ProfileService;
 import com.jarvis.novastra.service.StudyPodRoomService;
 import com.jarvis.novastra.service.StudyPodService;
+import com.jarvis.novastra.service.TrainerReviewService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -131,6 +132,9 @@ class NovastraApplicationTests {
 
 	@Autowired
 	private StudyPodRoomService studyPodRoomService;
+
+	@Autowired
+	private TrainerReviewService trainerReviewService;
 
 	@Autowired
 	private WebApplicationContext webApplicationContext;
@@ -447,8 +451,8 @@ class NovastraApplicationTests {
 		Map<String, Object> initial = careerService.getCareerRoadmap(user.getUserId());
 		assertEquals(false, initial.get("isCurriculumCompleted"));
 		assertEquals(false, initial.get("isAllPowPassed"));
-		assertEquals(false, initial.get("canRunAiAudit"));
-		assertFalse(careerService.canUserRunAudit(user.getUserId()));
+		assertEquals(false, initial.get("canSubmitPortfolio"));
+		assertFalse(careerService.canSubmitPortfolio(user.getUserId()));
 		List<Map<String, Object>> testsInitial = (List<Map<String, Object>>) initial.get("blindTests");
 		Map<String, Object> firstCard = testsInitial.get(0);
 		List<Map<String, Object>> tasks = (List<Map<String, Object>>) firstCard.get("tasks");
@@ -518,10 +522,10 @@ class NovastraApplicationTests {
 		Map<String, Object> powOnly = careerService.getCareerRoadmap(user.getUserId());
 		assertEquals(false, powOnly.get("isCurriculumCompleted"));
 		assertEquals(true, powOnly.get("isAllPowPassed"));
-		assertEquals(false, powOnly.get("canRunAiAudit"));
-		assertFalse(careerService.canUserRunAudit(user.getUserId()));
+		assertEquals(false, powOnly.get("canSubmitPortfolio"));
+		assertFalse(careerService.canSubmitPortfolio(user.getUserId()));
 
-		// Complete all curriculum courses to 100%; AI Audit unlocks once both prerequisites pass
+		// Complete all curriculum courses to 100%; portfolio unlocks once both prerequisites pass
 		List<Map<String, Object>> curList = (List<Map<String, Object>>) powOnly.get("curriculum");
 		assertEquals(3, curList.size());
 		for (Map<String, Object> cur : curList) {
@@ -531,8 +535,8 @@ class NovastraApplicationTests {
 		Map<String, Object> unlocked = careerService.getCareerRoadmap(user.getUserId());
 		assertEquals(true, unlocked.get("isCurriculumCompleted"));
 		assertEquals(true, unlocked.get("isAllPowPassed"));
-		assertEquals(true, unlocked.get("canRunAiAudit"));
-		assertTrue(careerService.canUserRunAudit(user.getUserId()));
+		assertEquals(true, unlocked.get("canSubmitPortfolio"));
+		assertTrue(careerService.canSubmitPortfolio(user.getUserId()));
 	}
 
 	@Test
@@ -552,7 +556,7 @@ class NovastraApplicationTests {
 			assertEquals(3, bulletCount, "Expected 3 bullets for " + p.getProjectId());
 		}
 
-		// 2. Onboarded user gets 3 enriched portfolioProjects with courseTitle & NOT_SUBMITTED status
+		// 2. Onboarded user gets 3 enriched portfolioProjects in LOCKED state while prerequisites are incomplete
 		User user = authService.register("Portfolio Verifier", "portfolio.rol03@novastra.id", "secret123");
 		CareerRole role = careerRoleRepository.findByRoleName("Full-Stack Web Developer").orElseThrow();
 		List<Skill> roleSkills = skillRepository.findByCategoryIgnoreCase(role.getRoleName());
@@ -565,13 +569,15 @@ class NovastraApplicationTests {
 		Map<String, Object> firstProject = projects.get(0);
 		String projectId = String.valueOf(firstProject.get("projectId"));
 		assertFalse(String.valueOf(firstProject.get("courseTitle")).isBlank());
-		assertEquals("NOT_SUBMITTED", firstProject.get("status"));
+		assertEquals("LOCKED", firstProject.get("lifecycleState"));
+		assertEquals("LOCKED", firstProject.get("status"));
+		assertEquals(false, firstProject.get("canSubmit"));
 
 		// 3. Submitting before curriculum 100% and PoW pass is rejected with IllegalStateException
 		assertThrows(IllegalStateException.class, () -> careerService.submitPortfolioProject(
 				user.getUserId(), projectId, "https://github.com/novastra/sample-project"));
 
-		// Unlock prerequisites: pass all 3 Blind Tests and complete all 3 curriculum courses
+		// Unlock prerequisites: pass all 3 Blind Tests and complete all 3 curriculum courses -> UNLOCKED
 		List<Map<String, Object>> blindTests = (List<Map<String, Object>>) roadmap.get("blindTests");
 		for (Map<String, Object> bt : blindTests) {
 			List<Map<String, Object>> btTasks = (List<Map<String, Object>>) bt.get("tasks");
@@ -586,6 +592,11 @@ class NovastraApplicationTests {
 			String eid = String.valueOf(enrollmentService.enroll(user.getUserId(), String.valueOf(cur.get("courseId"))).get("enrollmentId"));
 			enrollmentService.updateProgress(eid, BigDecimal.valueOf(100), 0);
 		}
+		Map<String, Object> unlockedRoadmap = careerService.getCareerRoadmap(user.getUserId());
+		Map<String, Object> unlockedFirst = ((List<Map<String, Object>>) unlockedRoadmap.get("portfolioProjects")).get(0);
+		assertEquals("UNLOCKED", unlockedFirst.get("lifecycleState"));
+		assertEquals("NOT_SUBMITTED", unlockedFirst.get("status"));
+		assertEquals(true, unlockedFirst.get("canSubmit"));
 
 		// 4a. Blank and non-http(s) URLs throw IllegalArgumentException
 		assertThrows(IllegalArgumentException.class, () -> careerService.submitPortfolioProject(
@@ -593,25 +604,58 @@ class NovastraApplicationTests {
 		assertThrows(IllegalArgumentException.class, () -> careerService.submitPortfolioProject(
 				user.getUserId(), projectId, "ftp://invalid-host.example/repo"));
 
-		// 4b. Valid submission stores SUBMITTED status, score 0.00, and audit waiting note
+		// 4b. Valid submission enters PENDING_REVIEW with status=PENDING, null score & null feedbackNotes
 		Map<String, Object> firstSubmit = careerService.submitPortfolioProject(
 				user.getUserId(), projectId, "https://github.com/novastra/first-release");
-		assertEquals("SUBMITTED", firstSubmit.get("status"));
-		assertEquals(0, new BigDecimal("0.00").compareTo((BigDecimal) firstSubmit.get("score")));
-		assertEquals("Menunggu proses AI Audit...", firstSubmit.get("feedbackNotes"));
+		assertEquals("PENDING_REVIEW", firstSubmit.get("lifecycleState"));
+		assertEquals("PENDING", firstSubmit.get("status"));
+		assertNull(firstSubmit.get("score"));
+		assertNull(firstSubmit.get("feedbackNotes"));
 
-		// 4c. Re-submission updates the single existing row without duplicating
+		// 4c. Re-submission while PENDING updates single row without duplicating
 		String updatedUrl = "https://github.com/novastra/updated-release";
 		careerService.submitPortfolioProject(user.getUserId(), projectId, updatedUrl);
 		List<PortfolioSubmission> savedRows = portfolioSubmissionRepository.findByUserIdAndProjectIdIn(
 				user.getUserId(), List.of(projectId));
 		assertEquals(1, savedRows.size());
 		assertEquals(updatedUrl, savedRows.get(0).getExternalUrl());
+		String submissionId = savedRows.get(0).getSubmissionId();
 
-		Map<String, Object> refreshed = careerService.getCareerRoadmap(user.getUserId());
-		Map<String, Object> refreshedFirst = ((List<Map<String, Object>>) refreshed.get("portfolioProjects")).get(0);
-		assertEquals("SUBMITTED", refreshedFirst.get("status"));
-		assertEquals(updatedUrl, refreshedFirst.get("externalUrl"));
+		Map<String, Object> pendingView = careerService.getCareerRoadmap(user.getUserId());
+		Map<String, Object> pendingFirst = ((List<Map<String, Object>>) pendingView.get("portfolioProjects")).get(0);
+		assertEquals("PENDING_REVIEW", pendingFirst.get("lifecycleState"));
+		assertEquals("PENDING", pendingFirst.get("status"));
+		assertNull(pendingFirst.get("score"));
+		assertEquals(updatedUrl, pendingFirst.get("externalUrl"));
+
+		// 4d. Trainer REJECTED moves project to REVIEWED/REJECTED, allows resubmit back to PENDING_REVIEW
+		trainerReviewService.reviewSubmission(
+				submissionId,
+				new TrainerReviewService.TrainerReviewRequest(55, "Tambahkan unit test error handling.", "REJECTED"));
+		Map<String, Object> rejectedView = ((List<Map<String, Object>>) careerService.getCareerRoadmap(user.getUserId()).get("portfolioProjects")).get(0);
+		assertEquals("REVIEWED", rejectedView.get("lifecycleState"));
+		assertEquals("REJECTED", rejectedView.get("reviewOutcome"));
+		assertEquals(true, rejectedView.get("canSubmit"));
+		assertEquals("Tambahkan unit test error handling.", rejectedView.get("feedbackNotes"));
+
+		String revisedUrl = "https://github.com/novastra/revised-release";
+		Map<String, Object> resubmit = careerService.submitPortfolioProject(user.getUserId(), projectId, revisedUrl);
+		assertEquals("PENDING_REVIEW", resubmit.get("lifecycleState"));
+		assertEquals("PENDING", resubmit.get("status"));
+		assertNull(resubmit.get("score"));
+		assertNull(resubmit.get("feedbackNotes"));
+
+		// 4e. Trainer VERIFIED locks further overwrites
+		trainerReviewService.reviewSubmission(
+				submissionId,
+				new TrainerReviewService.TrainerReviewRequest(88, "Revisi lengkap dan test berjalan bersih.", "VERIFIED"));
+		Map<String, Object> verifiedView = ((List<Map<String, Object>>) careerService.getCareerRoadmap(user.getUserId()).get("portfolioProjects")).get(0);
+		assertEquals("REVIEWED", verifiedView.get("lifecycleState"));
+		assertEquals("VERIFIED", verifiedView.get("reviewOutcome"));
+		assertEquals(false, verifiedView.get("canSubmit"));
+		assertEquals(0, new BigDecimal("88.00").compareTo((BigDecimal) verifiedView.get("score")));
+		assertThrows(IllegalStateException.class, () -> careerService.submitPortfolioProject(
+				user.getUserId(), projectId, "https://github.com/novastra/overwrite-attempt"));
 	}
 
 	@Test
@@ -1090,12 +1134,48 @@ class NovastraApplicationTests {
 			assertEquals((int) Math.round(target * 0.70), ((Number) axis.get("currentLevel")).intValue());
 		}
 
-		// Stage 3: Submit all portfolio projects -> 100% of targetLevel and 0 topPriorityGaps
+		// Stage 3: Submitting portfolio projects alone (PENDING) does NOT increase skill gaps (remains 0.70)
+		List<String> submissionIds = new java.util.ArrayList<>();
 		for (Map<String, Object> proj : (List<Map<String, Object>>) initial.get("portfolioProjects")) {
-			careerService.submitPortfolioProject(
+			Map<String, Object> submitted = careerService.submitPortfolioProject(
 					uid,
 					String.valueOf(proj.get("projectId")),
 					"https://github.com/novastra/sync-" + proj.get("projectId"));
+			submissionIds.add(String.valueOf(submitted.get("submissionId")));
+		}
+		List<Map<String, Object>> afterPendingSubmit = (List<Map<String, Object>>) careerService.getCareerRoadmap(uid).get("skillGapAnalysis");
+		for (Map<String, Object> axis : afterPendingSubmit) {
+			int target = ((Number) axis.get("targetLevel")).intValue();
+			assertEquals((int) Math.round(target * 0.70), ((Number) axis.get("currentLevel")).intValue());
+		}
+
+		// Stage 3b: REJECTED review or score < 70 does NOT increase skill gap
+		trainerReviewService.reviewSubmission(
+				submissionIds.get(0),
+				new TrainerReviewService.TrainerReviewRequest(65, "Perbaiki validasi sebelum lulus.", "REJECTED"));
+		List<Map<String, Object>> afterRejected = (List<Map<String, Object>>) careerService.getCareerRoadmap(uid).get("skillGapAnalysis");
+		for (Map<String, Object> axis : afterRejected) {
+			int target = ((Number) axis.get("targetLevel")).intValue();
+			assertEquals((int) Math.round(target * 0.70), ((Number) axis.get("currentLevel")).intValue());
+		}
+
+		// Stage 4: Trainer VERIFIED score 80 lifts skill level proportionally (0.70 + 0.30 * 0.80 = 0.94)
+		for (String sid : submissionIds) {
+			trainerReviewService.reviewSubmission(
+					sid,
+					new TrainerReviewService.TrainerReviewRequest(80, "Memenuhi ekspektasi utama.", "VERIFIED"));
+		}
+		List<Map<String, Object>> afterVerified80 = (List<Map<String, Object>>) careerService.getCareerRoadmap(uid).get("skillGapAnalysis");
+		for (Map<String, Object> axis : afterVerified80) {
+			int target = ((Number) axis.get("targetLevel")).intValue();
+			assertEquals((int) Math.round(target * 0.94), ((Number) axis.get("currentLevel")).intValue());
+		}
+
+		// Stage 5: Editing Trainer score 80 -> 100 is idempotent (reaches 100% of targetLevel without double counting)
+		for (String sid : submissionIds) {
+			trainerReviewService.reviewSubmission(
+					sid,
+					new TrainerReviewService.TrainerReviewRequest(100, "Sempurna setelah evaluasi ulang.", "VERIFIED"));
 		}
 		List<com.jarvis.novastra.entity.UserSkillGap> persistedGaps = userSkillGapRepository.findByUserId(uid);
 		assertEquals(6, persistedGaps.size());
